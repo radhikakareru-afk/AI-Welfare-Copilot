@@ -1,0 +1,11 @@
+{
+  "name": "ai-welfare-copilot-root",
+  "version": "1.0.0",
+  "description": "AI Welfare Copilot Workspace",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "install:frontend": "npm install --prefix frontend"
+  }
+}
