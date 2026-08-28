@@ -1,55 +1,63 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import api from '../services/api';
 
 const NotificationContext = createContext(null);
 
-const DEFAULT_NOTIFICATIONS = [
-  {
-    id: "notif-1",
-    title: "Welcome to AI Welfare Copilot!",
-    message: "Complete your profile to automatically check eligibility for over 100+ state and central welfare schemes.",
-    is_read: false,
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 hours ago
-  },
-  {
-    id: "notif-2",
-    title: "Maharashtra loan waiver deadline approaching",
-    message: "Shetkari Karjmukti Yojna applications close soon. Ensure your crop loan account is Aadhaar-linked.",
-    is_read: false,
-    created_at: new Date(Date.now() - 3600000 * 24).toISOString(), // 1 day ago
-    deadline_scheme_id: "f401d892-0b1a-4712-a1f9-90656a8dff3e"
-  },
-  {
-    id: "notif-3",
-    title: "Ayushman Bharat verification active",
-    message: "Empaneled hospitals are now conducting free biometric validation using only your Aadhaar and Ration cards.",
-    is_read: true,
-    created_at: new Date(Date.now() - 3600000 * 48).toISOString(), // 2 days ago
-  }
-];
-
 export const NotificationProvider = ({ children }) => {
-  const [notifications, setNotifications] = useState(() => {
-    const saved = localStorage.getItem('welfare_notifications');
-    return saved ? JSON.parse(saved) : DEFAULT_NOTIFICATIONS;
-  });
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState([]);
+
+  const fetchNotifications = async () => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+    try {
+      const res = await api.getNotifications(user.id);
+      if (res.success && res.notifications) {
+        setNotifications(res.notifications);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch notifications from API:', err.message);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem('welfare_notifications', JSON.stringify(notifications));
-  }, [notifications]);
+    fetchNotifications();
+  }, [user]);
 
-  const markAsRead = (id) => {
+  const markAsRead = async (id) => {
+    // Optimistic UI update
     setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, is_read: true } : n)
     );
+
+    try {
+      await api.markNotificationAsRead(id);
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err.message);
+      fetchNotifications(); // Reload on failure
+    }
   };
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
+    if (!user) return;
+    // Optimistic UI update
     setNotifications(prev =>
       prev.map(n => ({ ...n, is_read: true }))
     );
+
+    try {
+      await api.markAllNotificationsAsRead(user.id);
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err.message);
+      fetchNotifications(); // Reload on failure
+    }
   };
 
   const addNotification = (title, message, deadline_scheme_id = null) => {
+    // Dummy handler for compatibility - notifications are mainly created server-side in DB
     const newNotif = {
       id: `notif-${Math.random()}`,
       title,
@@ -69,7 +77,8 @@ export const NotificationProvider = ({ children }) => {
       unreadCount,
       markAsRead,
       markAllAsRead,
-      addNotification
+      addNotification,
+      refreshNotifications: fetchNotifications
     }}>
       {children}
     </NotificationContext.Provider>

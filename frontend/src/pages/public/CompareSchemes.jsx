@@ -1,22 +1,69 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { mockSchemes } from '../../data/schemes';
-import { ArrowLeft, GitCompare, ExternalLink, HelpCircle } from 'lucide-react';
-import Button from '../../components/common/Button';
+import api from '../../services/api';
+import { ArrowLeft, GitCompare } from 'lucide-react';
 
 export default function CompareSchemes() {
   const [searchParams] = useSearchParams();
   
-  // Extract scheme IDs
+  // State
+  const [schemes, setSchemes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Extract scheme IDs from URL
   const schemeIds = useMemo(() => {
     const ids = searchParams.get('ids');
-    return ids ? ids.split(',') : [];
+    return ids ? ids.split(',').map(String) : [];
   }, [searchParams]);
 
-  // Fetch selected schemes
+  // Load all schemes to filter on client
+  useEffect(() => {
+    setLoading(true);
+    api.getSchemes()
+      .then(res => {
+        if (res.success && res.schemes) {
+          setSchemes(res.schemes);
+        } else {
+          setError('Failed to load schemes for comparison.');
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error fetching schemes:', err);
+        setError('Failed to connect to backend server.');
+        setLoading(false);
+      });
+  }, []);
+
+  // Filter selected schemes
   const selectedSchemes = useMemo(() => {
-    return mockSchemes.filter(s => schemeIds.includes(s.id));
-  }, [schemeIds]);
+    return schemes.filter(s => schemeIds.includes(String(s.id)));
+  }, [schemes, schemeIds]);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center font-sans">
+        <div className="w-12 h-12 border-4 border-gov-purple border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-slate-500 text-sm font-semibold">Generating comparison matrix...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center font-sans">
+        <h3 className="text-lg font-bold text-gov-dark mb-1">Comparison Matrix Error</h3>
+        <p className="text-xs text-slate-500 mb-6">{error}</p>
+        <Link 
+          to="/schemes"
+          className="px-4 py-2 bg-gov-purple text-white text-xs font-bold rounded-xl"
+        >
+          Back to Catalog
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 font-sans text-left">
@@ -58,7 +105,7 @@ export default function CompareSchemes() {
                         {s.name}
                       </h3>
                       <p className="text-[10px] text-slate-450 font-semibold mt-1 leading-snug truncate">
-                        {s.department}
+                        {s.department || 'Government Department'}
                       </p>
                     </th>
                   ))}
@@ -76,7 +123,7 @@ export default function CompareSchemes() {
                 <tr>
                   <td className="p-6 font-bold text-gov-dark bg-slate-50/20">Welfare Benefits</td>
                   {selectedSchemes.map(s => (
-                    <td key={s.id} className="p-6 leading-relaxed align-top">{s.benefits}</td>
+                    <td key={s.id} className="p-6 leading-relaxed align-top">{s.benefits || 'No specific benefits text'}</td>
                   ))}
                   {Array.from({ length: Math.max(0, 3 - selectedSchemes.length) }).map((_, idx) => (
                     <td key={idx} className="p-6"></td>
@@ -100,8 +147,8 @@ export default function CompareSchemes() {
                 <tr>
                   <td className="p-6 font-bold text-gov-dark bg-slate-50/20">Maximum Income Cap</td>
                   {selectedSchemes.map(s => (
-                    <td key={s.id} className="p-6 font-semibold text-slate-700">
-                      {s.rules.income_max ? `₹${s.rules.income_max.toLocaleString()} / year` : 'No income cap'}
+                    <td key={s.id} className="p-6 font-semibold text-slate-750">
+                      {s.rules.income_max ? `₹${s.rules.income_max.toLocaleString()}` : 'No limit'}
                     </td>
                   ))}
                   {Array.from({ length: Math.max(0, 3 - selectedSchemes.length) }).map((_, idx) => (
@@ -109,11 +156,11 @@ export default function CompareSchemes() {
                   ))}
                 </tr>
 
-                {/* State constraints */}
+                {/* State Allowed */}
                 <tr>
-                  <td className="p-6 font-bold text-gov-dark bg-slate-50/20">Active Geography</td>
+                  <td className="p-6 font-bold text-gov-dark bg-slate-50/20">Applicable Region</td>
                   {selectedSchemes.map(s => (
-                    <td key={s.id} className="p-6 font-semibold text-slate-700 capitalize">
+                    <td key={s.id} className="p-6">
                       {s.rules.states_allowed.length > 0 ? s.rules.states_allowed.join(', ') : 'All India (Central)'}
                     </td>
                   ))}
@@ -122,12 +169,12 @@ export default function CompareSchemes() {
                   ))}
                 </tr>
 
-                {/* Allowed Occupations */}
+                {/* Occupations Allowed */}
                 <tr>
-                  <td className="p-6 font-bold text-gov-dark bg-slate-50/20">Target Occupations</td>
+                  <td className="p-6 font-bold text-gov-dark bg-slate-50/20">Target Occupation</td>
                   {selectedSchemes.map(s => (
-                    <td key={s.id} className="p-6 font-semibold text-slate-700 capitalize">
-                      {s.rules.occupations_allowed.length > 0 ? s.rules.occupations_allowed.join(', ') : 'All Citizens'}
+                    <td key={s.id} className="p-6 capitalize">
+                      {s.rules.occupations_allowed.length > 0 ? s.rules.occupations_allowed.join(', ') : 'Any'}
                     </td>
                   ))}
                   {Array.from({ length: Math.max(0, 3 - selectedSchemes.length) }).map((_, idx) => (
@@ -135,47 +182,18 @@ export default function CompareSchemes() {
                   ))}
                 </tr>
 
-                {/* Required Documents */}
+                {/* Disability Requirements */}
                 <tr>
-                  <td className="p-6 font-bold text-gov-dark bg-slate-50/20">Mandatory Documents</td>
+                  <td className="p-6 font-bold text-gov-dark bg-slate-50/20">Requires Disability (PwD)</td>
                   {selectedSchemes.map(s => (
-                    <td key={s.id} className="p-6 align-top">
-                      <ul className="space-y-1 pl-4 list-disc text-slate-500">
-                        {s.documents.filter(d => d.is_mandatory).map((doc, i) => (
-                          <li key={i}>{doc.document_name}</li>
-                        ))}
-                      </ul>
-                    </td>
-                  ))}
-                  {Array.from({ length: Math.max(0, 3 - selectedSchemes.length) }).map((_, idx) => (
-                    <td key={idx} className="p-6"></td>
-                  ))}
-                </tr>
-
-                {/* Direct Action Link */}
-                <tr>
-                  <td className="p-6 font-bold text-gov-dark bg-slate-50/20">Filing Links</td>
-                  {selectedSchemes.map(s => (
-                    <td key={s.id} className="p-6 align-top">
-                      <div className="space-y-2">
-                        <Link
-                          to={`/schemes/${s.id}`}
-                          className="w-full py-2 bg-slate-100 hover:bg-gov-green hover:text-white text-slate-700 font-bold rounded-lg text-[10px] transition-all inline-flex justify-center items-center"
-                        >
-                          View Guide
-                        </Link>
-                        {s.portal_url && (
-                          <a
-                            href={s.portal_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full py-2 bg-slate-900 text-slate-350 hover:text-white font-bold rounded-lg text-[10px] transition-all inline-flex justify-center items-center space-x-1"
-                          >
-                            <span>Apply Site</span>
-                            <ExternalLink size={10} />
-                          </a>
-                        )}
-                      </div>
+                    <td key={s.id} className="p-6">
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase ${
+                        s.rules.requires_disability 
+                          ? 'bg-rose-50 text-rose-600 border border-rose-100' 
+                          : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {s.rules.requires_disability ? `Yes (${s.rules.min_disability_percentage}%+)` : 'No'}
+                      </span>
                     </td>
                   ))}
                   {Array.from({ length: Math.max(0, 3 - selectedSchemes.length) }).map((_, idx) => (
@@ -189,19 +207,10 @@ export default function CompareSchemes() {
         </div>
       ) : (
         <div className="bg-white p-12 text-center border border-slate-200 rounded-2xl shadow-premium">
-          <GitCompare size={40} className="mx-auto text-slate-300 mb-4" />
-          <h3 className="text-sm font-bold text-gov-dark mb-1">No Schemes Selected</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto mb-6">
-            Visit the Catalog, select multiple check-boxes on schemes, and click compare.
-          </p>
-          <Link
-            to="/schemes"
-            className="px-6 py-3 bg-gov-green text-white font-bold rounded-xl text-xs hover-lift transition-all inline-block shadow-md shadow-emerald-500/10"
-          >
-            Go to Catalog
-          </Link>
+          <p className="text-xs text-slate-500">No schemes selected for comparison.</p>
         </div>
       )}
+
     </div>
   );
 }

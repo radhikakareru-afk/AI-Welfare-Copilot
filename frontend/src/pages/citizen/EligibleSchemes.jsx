@@ -1,32 +1,52 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { mockSchemes } from '../../data/schemes';
 import { evaluateEligibility } from '../../utils/eligibilityEngine';
+import api from '../../services/api';
 import { 
   Search, 
-  ArrowLeft,
-  CheckCircle,
-  HelpCircle,
-  XCircle,
-  AlertCircle,
-  GitCompare,
+  CheckCircle, 
+  AlertCircle, 
+  GitCompare, 
   ArrowRight,
-  TrendingUp,
-  Tag
+  Tag 
 } from 'lucide-react';
 
 export default function EligibleSchemes() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
+  const [schemes, setSchemes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedCompareIds, setSelectedCompareIds] = useState([]);
 
+  // Fetch active schemes on mount
+  useEffect(() => {
+    setLoading(true);
+    api.getSchemes()
+      .then(res => {
+        if (res.success && res.schemes) {
+          setSchemes(res.schemes);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error loading eligible schemes:', err);
+        setLoading(false);
+      });
+  }, []);
+
+  // Dynamically build categories from schemes
+  const categories = useMemo(() => {
+    return ['All', ...new Set(schemes.map(s => s.category))];
+  }, [schemes]);
+
   // Filter schemes to show ONLY eligible & partially eligible
   const qualifiedSchemes = useMemo(() => {
-    let result = mockSchemes.map(scheme => {
+    let result = schemes.map(scheme => {
       const assessment = evaluateEligibility(profile, scheme);
       return {
         ...scheme,
@@ -38,7 +58,7 @@ export default function EligibleSchemes() {
       const isQualified = status === 'eligible' || status === 'partially_eligible';
       
       // Text Search
-      const searchStr = `${scheme.name} ${scheme.tagline} ${scheme.description} ${scheme.department}`.toLowerCase();
+      const searchStr = `${scheme.name} ${scheme.tagline || ''} ${scheme.description || ''} ${scheme.department || ''}`.toLowerCase();
       const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
 
       // Category filter
@@ -48,7 +68,7 @@ export default function EligibleSchemes() {
     });
 
     return result;
-  }, [profile, searchTerm, selectedCategory]);
+  }, [schemes, profile, searchTerm, selectedCategory]);
 
   const handleCompareCheckbox = (schemeId) => {
     setSelectedCompareIds(prev => {
@@ -68,6 +88,15 @@ export default function EligibleSchemes() {
     if (selectedCompareIds.length < 2) return;
     navigate(`/compare?ids=${selectedCompareIds.join(',')}`);
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-16 text-center font-sans">
+        <div className="w-12 h-12 border-4 border-gov-purple border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-slate-500 text-sm font-semibold">Running demographics evaluation engine...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 font-sans text-left">
@@ -109,11 +138,9 @@ export default function EligibleSchemes() {
             className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-gov-purple focus:bg-white text-xs appearance-none cursor-pointer"
           >
             <option value="All">All Categories</option>
-            <option value="Agriculture">Agriculture</option>
-            <option value="Education">Education</option>
-            <option value="Pension & Insurance">Pension & Insurance</option>
-            <option value="Health & Medical">Health & Medical</option>
-            <option value="Housing">Housing</option>
+            {categories.filter(c => c !== 'All').map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -156,8 +183,8 @@ export default function EligibleSchemes() {
                 <input
                   type="checkbox"
                   id={`compare-${scheme.id}`}
-                  checked={selectedCompareIds.includes(scheme.id)}
-                  onChange={() => handleCompareCheckbox(scheme.id)}
+                  checked={selectedCompareIds.includes(String(scheme.id))}
+                  onChange={() => handleCompareCheckbox(String(scheme.id))}
                   className="rounded border-slate-300 text-gov-purple focus:ring-gov-purple h-3 w-3"
                 />
                 <label htmlFor={`compare-${scheme.id}`} className="cursor-pointer select-none">
@@ -188,14 +215,16 @@ export default function EligibleSchemes() {
                 {scheme.name}
               </h3>
               <span className="text-slate-400 text-[11px] font-medium leading-snug line-clamp-2 min-h-[2.5rem] mb-4">
-                {scheme.tagline}
+                {scheme.tagline || scheme.description}
               </span>
 
               {/* Brief details */}
               <div className="space-y-2 border-t border-slate-100 pt-4 mb-6 text-[10px] text-slate-500">
                 <div className="flex justify-between">
                   <span className="font-bold text-slate-400">Benefits:</span>
-                  <span className="text-right truncate max-w-[130px] font-semibold text-slate-700">{scheme.benefits.slice(0, 30)}...</span>
+                  <span className="text-right truncate max-w-[130px] font-semibold text-slate-700" title={scheme.benefits}>
+                    {scheme.benefits || 'Financial Assistance'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="font-bold text-slate-400">Deadline:</span>

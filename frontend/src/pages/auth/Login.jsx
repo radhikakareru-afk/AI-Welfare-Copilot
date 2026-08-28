@@ -23,7 +23,7 @@ export default function Login() {
     setError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     
@@ -33,8 +33,8 @@ export default function Login() {
     }
 
     setLoading(true);
-    setTimeout(() => {
-      const res = login(email, password);
+    try {
+      const res = await login(email, password);
       setLoading(false);
       
       if (res.success) {
@@ -43,7 +43,6 @@ export default function Login() {
         } else if (activeTab === 'citizen' && res.user.role === 'citizen') {
           navigate('/dashboard');
         } else {
-          // Cross role mismatch (e.g. logging in with admin credentials under citizen tab or vice-versa)
           if (activeTab === 'citizen') {
             setError('Invalid citizen email or password.');
           } else {
@@ -57,7 +56,10 @@ export default function Login() {
           setError('Invalid admin email or password.');
         }
       }
-    }, 800);
+    } catch (err) {
+      setLoading(false);
+      setError('Failed to login. Please check connection.');
+    }
   };
 
   const handleQuickFill = () => {

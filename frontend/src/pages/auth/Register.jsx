@@ -20,7 +20,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -45,15 +45,18 @@ export default function Register() {
     }
 
     setLoading(true);
-    setTimeout(() => {
-      const res = register(email, password, name, state, district);
+    try {
+      const res = await register(email, password, name, state, district);
       setLoading(false);
       if (res.success) {
         navigate('/dashboard');
       } else {
         setError('Registration failed. Try again.');
       }
-    }, 800);
+    } catch (err) {
+      setLoading(false);
+      setError('Registration failed. Please check connection.');
+    }
   };
 
   return (

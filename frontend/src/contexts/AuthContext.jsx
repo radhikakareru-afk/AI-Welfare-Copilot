@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '../services/api';
 
 const AuthContext = createContext(null);
 
 const DEFAULT_CITIZEN_PROFILE = {
   full_name: "Rajesh Kumar",
-  date_of_birth: "1994-08-15",
+  age: 30,
   gender: "male",
   annual_income: 120000,
   state: "Maharashtra",
@@ -12,8 +13,8 @@ const DEFAULT_CITIZEN_PROFILE = {
   occupation: "Farmer",
   category: "OBC",
   education: "Secondary Education",
-  is_disabled: false,
-  disability_percentage: 0
+  disability_status: "No",
+  address: ""
 };
 
 export const AuthProvider = ({ children }) => {
@@ -32,7 +33,6 @@ export const AuthProvider = ({ children }) => {
     return savedFavorites ? JSON.parse(savedFavorites) : [];
   });
 
-  // Track recently viewed schemes
   const [recentlyViewed, setRecentlyViewed] = useState(() => {
     const savedRecent = localStorage.getItem('welfare_recently_viewed');
     return savedRecent ? JSON.parse(savedRecent) : [];
@@ -46,74 +46,148 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user]);
 
+  // Synchronize profile, favorites, recently viewed from API when user changes
   useEffect(() => {
-    localStorage.setItem('welfare_profile', JSON.stringify(profile));
-  }, [profile]);
-
-  useEffect(() => {
-    localStorage.setItem('welfare_favorites', JSON.stringify(favorites));
-  }, [favorites]);
-
-  useEffect(() => {
-    localStorage.setItem('welfare_recently_viewed', JSON.stringify(recentlyViewed));
-  }, [recentlyViewed]);
-
-  const login = (email, password) => {
-    const cleanEmail = email.trim().toLowerCase();
-    
-    if (cleanEmail === 'admin@demo.com' && password === 'Admin@123') {
-      const adminUser = { email: cleanEmail, role: 'admin', id: 'admin-uuid-1' };
-      setUser(adminUser);
-      return { success: true, user: adminUser };
-    } 
-    
-    if (cleanEmail === 'citizen@demo.com' && password === 'Citizen@123') {
-      const citizenUser = { email: cleanEmail, role: 'citizen', id: 'citizen-uuid-1' };
-      setUser(citizenUser);
-      return { success: true, user: citizenUser };
+    if (!user) {
+      setProfile(DEFAULT_CITIZEN_PROFILE);
+      setFavorites([]);
+      setRecentlyViewed([]);
+      localStorage.removeItem('welfare_profile');
+      localStorage.removeItem('welfare_favorites');
+      localStorage.removeItem('welfare_recently_viewed');
+      return;
     }
 
-    return { success: false };
+    const fetchUserData = async () => {
+      try {
+        const profRes = await api.getProfile(user.id);
+        if (profRes.success && profRes.profile) {
+          setProfile(profRes.profile);
+          localStorage.setItem('welfare_profile', JSON.stringify(profRes.profile));
+        }
+      } catch (err) {
+        console.warn('API error fetching profile:', err.message);
+      }
+
+      try {
+        const favRes = await api.getFavorites(user.id);
+        if (favRes.success && favRes.favorites) {
+          const stringIds = favRes.favorites.map(String);
+          setFavorites(stringIds);
+          localStorage.setItem('welfare_favorites', JSON.stringify(stringIds));
+        }
+      } catch (err) {
+        console.warn('API error fetching favorites:', err.message);
+      }
+
+      try {
+        const recRes = await api.getRecentlyViewed(user.id);
+        if (recRes.success && recRes.recentlyViewed) {
+          const stringIds = recRes.recentlyViewed.map(String);
+          setRecentlyViewed(stringIds);
+          localStorage.setItem('welfare_recently_viewed', JSON.stringify(stringIds));
+        }
+      } catch (err) {
+        console.warn('API error fetching recently viewed:', err.message);
+      }
+    };
+
+    fetchUserData();
+  }, [user]);
+
+  const login = async (email, password) => {
+    try {
+      const res = await api.login(email, password);
+      if (res.success && res.user) {
+        setUser(res.user);
+        return { success: true, user: res.user };
+      }
+      return { success: false, message: 'Invalid email or password' };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
   };
 
-  const register = (email, password, fullName, state, district) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const newUser = { email: cleanEmail, role: 'citizen', id: `citizen-uuid-${Math.random()}` };
-    setUser(newUser);
-    setProfile({
-      ...DEFAULT_CITIZEN_PROFILE,
-      full_name: fullName || email.split('@')[0],
-      state: state || "Maharashtra",
-      district: district || "Pune",
-      annual_income: 0
-    });
-    return { success: true, user: newUser };
+  const register = async (email, password, fullName, state, district) => {
+    try {
+      const res = await api.register(email, password, fullName, state, district);
+      if (res.success && res.user) {
+        setUser(res.user);
+        return { success: true, user: res.user };
+      }
+      return { success: false, message: 'Registration failed' };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('welfare_user');
   };
 
-  const updateProfile = (updatedDetails) => {
-    setProfile(updatedDetails);
-  };
-
-  const toggleFavorite = (schemeId) => {
-    setFavorites(prev => {
-      if (prev.includes(schemeId)) {
-        return prev.filter(id => id !== schemeId);
-      } else {
-        return [...prev, schemeId];
+  const updateProfile = async (updatedDetails) => {
+    if (!user) return { success: false, message: 'Not logged in' };
+    try {
+      const res = await api.saveProfile(user.id, updatedDetails);
+      if (res.success && res.profile) {
+        setProfile(res.profile);
+        localStorage.setItem('welfare_profile', JSON.stringify(res.profile));
+        return { success: true, profile: res.profile };
       }
-    });
+      return { success: false, message: 'Failed to update profile' };
+    } catch (err) {
+      console.error('Failed to update profile:', err.message);
+      return { success: false, error: err.message };
+    }
   };
 
-  const addRecentlyViewed = (schemeId) => {
-    setRecentlyViewed(prev => {
-      const filtered = prev.filter(id => id !== schemeId);
-      return [schemeId, ...filtered].slice(0, 5); // Store top 5
+  const toggleFavorite = async (schemeId) => {
+    if (!user) return;
+    const stringId = String(schemeId);
+    const isFav = favorites.includes(stringId);
+    
+    // Optimistic UI update
+    setFavorites(prev => {
+      const updated = isFav ? prev.filter(id => id !== stringId) : [...prev, stringId];
+      localStorage.setItem('welfare_favorites', JSON.stringify(updated));
+      return updated;
     });
+
+    try {
+      if (isFav) {
+        await api.removeFavorite(user.id, schemeId);
+      } else {
+        await api.addFavorite(user.id, schemeId);
+      }
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err.message);
+      // Fallback: reload favorites from API on error
+      const favRes = await api.getFavorites(user.id);
+      if (favRes.success) {
+        const stringIds = favRes.favorites.map(String);
+        setFavorites(stringIds);
+        localStorage.setItem('welfare_favorites', JSON.stringify(stringIds));
+      }
+    }
+  };
+
+  const addRecentlyViewed = async (schemeId) => {
+    if (!user) return;
+    const stringId = String(schemeId);
+    
+    // Optimistic UI update
+    setRecentlyViewed(prev => {
+      const filtered = prev.filter(id => id !== stringId);
+      const updated = [stringId, ...filtered].slice(0, 5);
+      localStorage.setItem('welfare_recently_viewed', JSON.stringify(updated));
+      return updated;
+    });
+
+    try {
+      await api.addRecentlyViewed(user.id, schemeId);
+    } catch (err) {
+      console.error('Failed to add recently viewed:', err.message);
+    }
   };
 
   return (

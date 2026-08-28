@@ -1,55 +1,67 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
-import { mockSchemes } from '../../data/schemes';
 import { evaluateEligibility } from '../../utils/eligibilityEngine';
 import StatCard from '../../components/common/StatCard';
+import api from '../../services/api';
 import { 
-  User, 
   Bookmark, 
   Bell, 
   CheckSquare, 
-  Calendar, 
-  Clock, 
   ArrowRight,
   Sparkles,
-  GitCompare,
   TrendingUp,
-  Cpu,
-  Layers,
-  Heart
 } from 'lucide-react';
 
 export default function Dashboard() {
   const { user, profile, favorites, recentlyViewed } = useAuth();
   const { notifications } = useNotifications();
 
+  const [schemes, setSchemes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load schemes from API
+  useEffect(() => {
+    setLoading(true);
+    api.getSchemes()
+      .then(res => {
+        if (res.success && res.schemes) {
+          setSchemes(res.schemes);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Dashboard scheme loading error:', err);
+        setLoading(false);
+      });
+  }, []);
+
   // Citizen Computations
   const eligibleSchemes = useMemo(() => {
-    return mockSchemes.filter(scheme => {
+    return schemes.filter(scheme => {
       const { status } = evaluateEligibility(profile, scheme);
       return status === 'eligible';
     });
-  }, [profile]);
+  }, [schemes, profile]);
 
   const partiallyEligibleCount = useMemo(() => {
-    return mockSchemes.filter(scheme => {
+    return schemes.filter(scheme => {
       const { status } = evaluateEligibility(profile, scheme);
       return status === 'partially_eligible';
     }).length;
-  }, [profile]);
+  }, [schemes, profile]);
 
   const bookmarkedSchemes = useMemo(() => {
-    return mockSchemes.filter(s => favorites.includes(s.id));
-  }, [favorites]);
+    return schemes.filter(s => favorites.includes(String(s.id)));
+  }, [schemes, favorites]);
 
   const recentlyViewedSchemes = useMemo(() => {
-    return mockSchemes.filter(s => recentlyViewed.includes(s.id));
-  }, [recentlyViewed]);
+    return schemes.filter(s => recentlyViewed.includes(String(s.id)));
+  }, [schemes, recentlyViewed]);
 
   const upcomingDeadlines = useMemo(() => {
-    return mockSchemes
+    return schemes
       .filter(s => s.application_deadline)
       .map(s => ({
         id: s.id,
@@ -58,7 +70,16 @@ export default function Dashboard() {
       }))
       .sort((a, b) => a.date - b.date)
       .slice(0, 3);
-  }, []);
+  }, [schemes]);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-16 text-center font-sans">
+        <div className="w-12 h-12 border-4 border-gov-purple border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-slate-500 text-sm font-semibold">Recalibrating citizen metrics dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 font-sans text-left">
@@ -164,7 +185,7 @@ export default function Dashboard() {
                   <div key={scheme.id} className="py-3.5 flex justify-between items-center text-xs">
                     <div className="text-left pr-4">
                       <h4 className="font-bold text-slate-800 leading-snug">{scheme.name}</h4>
-                      <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-sm sm:max-w-md">{scheme.tagline}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-sm sm:max-w-md">{scheme.tagline || scheme.description}</p>
                     </div>
                     <Link
                       to={`/schemes/${scheme.id}`}
@@ -192,19 +213,23 @@ export default function Dashboard() {
               Upcoming Deadlines
             </h3>
 
-            <div className="space-y-4 text-xs">
-              {upcomingDeadlines.map((scheme) => (
-                <div key={scheme.id} className="flex justify-between items-center bg-rose-50/20 border border-rose-100/50 p-3 rounded-xl">
-                  <div className="text-left pr-3">
-                    <h4 className="font-bold text-slate-800 truncate max-w-[130px]">{scheme.name}</h4>
-                    <span className="text-[9px] text-rose-600 font-bold block uppercase mt-0.5">Closing Soon</span>
+            {upcomingDeadlines.length > 0 ? (
+              <div className="space-y-4 text-xs">
+                {upcomingDeadlines.map((scheme) => (
+                  <div key={scheme.id} className="flex justify-between items-center bg-rose-50/20 border border-rose-100/50 p-3 rounded-xl">
+                    <div className="text-left pr-3">
+                      <h4 className="font-bold text-slate-800 truncate max-w-[130px]">{scheme.name}</h4>
+                      <span className="text-[9px] text-rose-600 font-bold block uppercase mt-0.5">Closing Soon</span>
+                    </div>
+                    <span className="font-bold text-rose-600 bg-rose-100/80 px-2 py-1 rounded shrink-0">
+                      {scheme.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </span>
                   </div>
-                  <span className="font-bold text-rose-600 bg-rose-100/80 px-2 py-1 rounded shrink-0">
-                    {scheme.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 py-2 text-center font-medium">No deadlines approaching.</p>
+            )}
           </div>
 
           {/* Recently Viewed */}

@@ -179,10 +179,10 @@ export default function CitizenLayout({ children }) {
       <div className="p-4 border-t border-slate-800 bg-slate-950/20 text-xs flex justify-between items-center">
         <div className="flex items-center space-x-2 overflow-hidden text-left">
           <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-white shrink-0 font-bold uppercase">
-            {profile.full_name.charAt(0)}
+            {profile?.full_name?.charAt(0) || 'U'}
           </div>
           <div className="truncate">
-            <span className="font-bold text-white block truncate">{profile.full_name}</span>
+            <span className="font-bold text-white block truncate">{profile?.full_name || 'User'}</span>
             <span className="text-[10px] text-slate-500 truncate block">Citizen Account</span>
           </div>
         </div>
@@ -239,10 +239,10 @@ export default function CitizenLayout({ children }) {
             {/* Profile display badge */}
             <div className="flex items-center space-x-2 pl-3 border-l border-slate-200">
               <span className="text-xs font-bold text-slate-700 hidden sm:inline-block">
-                {profile.full_name}
+                {profile?.full_name || 'User'}
               </span>
               <div className="w-8 h-8 rounded-full bg-gov-green-light text-gov-green-dark flex items-center justify-center font-bold text-xs">
-                {profile.full_name.charAt(0)}
+                {profile?.full_name?.charAt(0) || 'U'}
               </div>
             </div>
           </div>

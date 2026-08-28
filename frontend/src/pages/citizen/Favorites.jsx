@@ -1,17 +1,35 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { mockSchemes } from '../../data/schemes';
 import { evaluateEligibility } from '../../utils/eligibilityEngine';
-import { Bookmark, Trash2, ArrowRight, GitCompare } from 'lucide-react';
-import Button from '../../components/common/Button';
+import api from '../../services/api';
+import { Bookmark, Trash2, ArrowRight } from 'lucide-react';
 
 export default function Favorites() {
   const { profile, favorites, toggleFavorite } = useAuth();
+  
+  const [schemes, setSchemes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch schemes from API on mount
+  useEffect(() => {
+    setLoading(true);
+    api.getSchemes()
+      .then(res => {
+        if (res.success && res.schemes) {
+          setSchemes(res.schemes);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error fetching schemes for favorites page:', err);
+        setLoading(false);
+      });
+  }, []);
 
   const bookmarkedSchemes = useMemo(() => {
-    return mockSchemes.filter(s => favorites.includes(s.id));
-  }, [favorites]);
+    return schemes.filter(s => favorites.includes(String(s.id)));
+  }, [schemes, favorites]);
 
   const renderEligibilityBadge = (scheme) => {
     const { status } = evaluateEligibility(profile, scheme);
@@ -36,6 +54,15 @@ export default function Favorites() {
       );
     }
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-16 text-center font-sans">
+        <div className="w-12 h-12 border-4 border-gov-purple border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-slate-500 text-sm font-semibold">Loading bookmarked schemes...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 font-sans text-left">
@@ -70,7 +97,7 @@ export default function Favorites() {
                   {scheme.name}
                 </h3>
                 <p className="text-xs text-slate-400 font-medium truncate max-w-lg">
-                  {scheme.tagline}
+                  {scheme.tagline || scheme.description}
                 </p>
               </div>
 

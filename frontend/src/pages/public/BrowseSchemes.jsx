@@ -1,13 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { mockSchemes } from '../../data/schemes';
-import { STATES_LIST, OCCUPATIONS_LIST, CATEGORIES_LIST } from '../../data/users';
+import { STATES_LIST, OCCUPATIONS_LIST } from '../../data/users';
 import { evaluateEligibility } from '../../utils/eligibilityEngine';
+import api from '../../services/api';
 import { 
   Search, 
   MapPin, 
-  Tag, 
   Briefcase, 
   ArrowRight,
   GitCompare,
@@ -21,6 +20,11 @@ export default function BrowseSchemes() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
+  // API State
+  const [schemes, setSchemes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -32,11 +36,35 @@ export default function BrowseSchemes() {
   const [selectedCompareIds, setSelectedCompareIds] = useState([]);
   const [filterEligible, setFilterEligible] = useState(false);
 
+  // Fetch schemes from API
+  useEffect(() => {
+    setLoading(true);
+    api.getSchemes()
+      .then(res => {
+        if (res.success && res.schemes) {
+          setSchemes(res.schemes);
+        } else {
+          setError('Failed to load schemes from database.');
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error fetching schemes:', err);
+        setError('Failed to connect to backend server.');
+        setLoading(false);
+      });
+  }, []);
+
+  // Dynamically extract categories from live schemes list
+  const categories = useMemo(() => {
+    return ['All', ...new Set(schemes.map(s => s.category))];
+  }, [schemes]);
+
   // Filter schemes
   const filteredSchemes = useMemo(() => {
-    let result = mockSchemes.filter(scheme => {
+    let result = schemes.filter(scheme => {
       // 1. Text Search
-      const searchStr = `${scheme.name} ${scheme.tagline} ${scheme.description} ${scheme.department}`.toLowerCase();
+      const searchStr = `${scheme.name} ${scheme.tagline || ''} ${scheme.description || ''} ${scheme.department || ''}`.toLowerCase();
       const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
 
       // 2. Category Filter
@@ -44,17 +72,21 @@ export default function BrowseSchemes() {
 
       // 3. State Filter
       const matchesState = selectedState === 'All' || 
+        !scheme.rules || 
+        !scheme.rules.states_allowed ||
         scheme.rules.states_allowed.length === 0 || 
         scheme.rules.states_allowed.some(s => s.toLowerCase() === selectedState.toLowerCase());
 
       // 4. Occupation Filter
       const matchesOccupation = selectedOccupation === 'All' ||
+        !scheme.rules ||
+        !scheme.rules.occupations_allowed ||
         scheme.rules.occupations_allowed.length === 0 ||
         scheme.rules.occupations_allowed.some(o => o.toLowerCase() === selectedOccupation.toLowerCase());
 
       // 5. Age filter
       let matchesAge = true;
-      if (minAge) {
+      if (minAge && scheme.rules) {
         const parsedAge = Number(minAge);
         const rules = scheme.rules;
         if (rules.age_min !== null && parsedAge < rules.age_min) matchesAge = false;
@@ -84,7 +116,7 @@ export default function BrowseSchemes() {
     });
 
     return result;
-  }, [searchTerm, selectedCategory, selectedState, selectedOccupation, minAge, sortOption, filterEligible, profile, user]);
+  }, [schemes, searchTerm, selectedCategory, selectedState, selectedOccupation, minAge, sortOption, filterEligible, profile, user]);
 
   // Handle comparison selection
   const handleCompareCheckbox = (schemeId) => {
@@ -152,20 +184,47 @@ export default function BrowseSchemes() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center font-sans">
+        <div className="w-12 h-12 border-4 border-gov-purple border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-slate-500 text-sm font-semibold">Loading government schemes catalog...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center font-sans">
+        <AlertCircle size={48} className="mx-auto text-rose-600 mb-4" />
+        <h3 className="text-lg font-bold text-gov-dark mb-1">Catalog Connection Error</h3>
+        <p className="text-xs text-slate-500 max-w-md mx-auto mb-6">{error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-gov-purple text-white text-xs font-bold rounded-xl hover:bg-gov-purple-dark transition-all"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 font-sans text-left">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 font-sans">
       
-      {/* Header */}
-      <div className="mb-10 text-center md:text-left">
-        <h1 className="text-3xl font-extrabold text-gov-dark tracking-tight">Government Schemes Catalog</h1>
-        <p className="mt-2 text-slate-500 text-sm">
-          Explore and search welfare schemes synchronized from central and state database API nodes.
+      {/* Header section */}
+      <div className="text-left mb-8">
+        <h1 className="text-2xl md:text-3xl font-extrabold text-gov-dark tracking-tight">
+          Government Welfare Catalog
+        </h1>
+        <p className="mt-1 text-slate-500 text-xs md:text-sm">
+          Browse, filter, and compare active welfare schemes available across state and central departments.
         </p>
       </div>
 
-      {/* Filter Controls Panel */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-premium mb-8 space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-5 gap-4">
+      {/* Filter and search card */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-premium mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           
           {/* Keyword Search */}
           <div className="relative sm:col-span-2">
@@ -174,30 +233,24 @@ export default function BrowseSchemes() {
             </div>
             <input
               type="text"
-              placeholder="Search by scheme name, benefits, dept..."
+              placeholder="Search scheme name, department, keywords..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-gov-purple focus:bg-white text-xs transition-all"
+              className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-gov-purple focus:bg-white text-xs"
             />
           </div>
 
           {/* Category Dropdown */}
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Tag size={16} />
-            </div>
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-gov-purple focus:bg-white text-xs appearance-none cursor-pointer"
+              className="block w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-gov-purple focus:bg-white text-xs appearance-none cursor-pointer"
             >
               <option value="All">All Categories</option>
-              {CATEGORIES_LIST.map((cat) => (
+              {categories.filter(c => c !== 'All').map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
-              <option value="Pension & Insurance">Pension & Insurance</option>
-              <option value="Health & Medical">Health & Medical</option>
-              <option value="Housing">Housing</option>
             </select>
           </div>
 
@@ -218,22 +271,10 @@ export default function BrowseSchemes() {
             </select>
           </div>
 
-          {/* Sorting */}
-          <div className="relative">
-            <select
-              value={sortOption}
-              onChange={(e) => setSortOption(e.target.value)}
-              className="block w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-gov-purple focus:bg-white text-xs appearance-none cursor-pointer"
-            >
-              <option value="name-asc">Sort: A to Z</option>
-              <option value="name-desc">Sort: Z to A</option>
-              <option value="deadline-near">Sort: Closing Soon</option>
-            </select>
-          </div>
         </div>
 
         {/* Second row filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100 items-center justify-between">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100 items-center justify-between mt-4">
           {/* Occupation Filter */}
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -251,7 +292,7 @@ export default function BrowseSchemes() {
             </select>
           </div>
 
-          {/* Age-related filter */}
+          {/* Age filter */}
           <div>
             <input
               type="number"
@@ -260,6 +301,19 @@ export default function BrowseSchemes() {
               onChange={(e) => setMinAge(e.target.value)}
               className="block w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-gov-purple focus:bg-white text-xs"
             />
+          </div>
+
+          {/* Sorting */}
+          <div className="relative">
+            <select
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value)}
+              className="block w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-gov-purple focus:bg-white text-xs appearance-none cursor-pointer"
+            >
+              <option value="name-asc">Sort: A to Z</option>
+              <option value="name-desc">Sort: Z to A</option>
+              <option value="deadline-near">Sort: Closing Soon</option>
+            </select>
           </div>
 
           {/* Toggle qualification */}
@@ -343,16 +397,14 @@ export default function BrowseSchemes() {
                 {scheme.name}
               </h3>
               <span className="text-slate-400 text-[11px] font-medium leading-snug line-clamp-2 min-h-[2.5rem] mb-4">
-                {scheme.tagline}
+                {scheme.tagline || scheme.description}
               </span>
 
               {/* Brief details */}
               <div className="space-y-2 border-t border-slate-100 pt-4 mb-6 text-[10px] text-slate-500">
                 <div className="flex justify-between">
-                  <span className="font-bold text-slate-400">Department:</span>
-                  <span className="text-right truncate max-w-[150px]" title={scheme.department}>
-                    {scheme.department}
-                  </span>
+                  <span className="font-bold text-slate-400">State:</span>
+                  <span className="text-right font-medium text-slate-700">{scheme.state || 'All India'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="font-bold text-slate-400">Deadline:</span>
