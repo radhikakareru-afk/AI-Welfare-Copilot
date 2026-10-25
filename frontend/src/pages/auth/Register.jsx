@@ -1,8 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { STATES_LIST } from '../../data/users';
-import { CheckSquare, Mail, Lock, AlertCircle, ArrowRight, User, MapPin } from 'lucide-react';
+import api from '../../services/api';
+import { 
+  CheckSquare, 
+  Mail, 
+  Lock, 
+  AlertCircle, 
+  ArrowRight, 
+  User, 
+  MapPin, 
+  CheckCircle2, 
+  KeyRound, 
+  RefreshCw, 
+  Send 
+} from 'lucide-react';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 
@@ -17,25 +30,113 @@ export default function Register() {
   const [state, setState] = useState('Maharashtra');
   const [district, setDistrict] = useState('');
   const [terms, setTerms] = useState(false);
+
+  // Email OTP Verification state
+  const [otp, setOtp] = useState('');
+  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [verificationToken, setVerificationToken] = useState(null);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpVerifyLoading, setOtpVerifyLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Feedback states
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Resend cooldown countdown timer
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  const handleRequestOtp = async () => {
+    setError('');
+    setSuccessMsg('');
+
+    if (!email || !email.includes('@')) {
+      setError('Please enter a valid email address first.');
+      return;
+    }
+
+    setOtpLoading(true);
+    try {
+      const res = await api.requestOtp(email);
+      setOtpLoading(false);
+      if (res.success) {
+        setIsOtpSent(true);
+        setIsDemoMode(Boolean(res.is_demo_mode));
+        setCooldown(res.cooldown_seconds || 60);
+        setSuccessMsg(res.message);
+      } else {
+        setError(res.message || 'Failed to send verification code.');
+        if (res.cooldown_remaining) {
+          setCooldown(res.cooldown_remaining);
+        }
+      }
+    } catch (err) {
+      setOtpLoading(false);
+      const errMsg = (err.data && err.data.message) || err.message || 'Failed to send verification code. Please check connection.';
+      setError(errMsg);
+      if (err.data && err.data.cooldown_remaining) {
+        setCooldown(err.data.cooldown_remaining);
+      }
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setError('');
+    setSuccessMsg('');
+
+    if (!otp || otp.trim().length !== 6) {
+      setError('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    setOtpVerifyLoading(true);
+    try {
+      const res = await api.verifyOtp(email, otp.trim());
+      setOtpVerifyLoading(false);
+      if (res.success) {
+        setIsEmailVerified(true);
+        setVerificationToken(res.verification_token);
+        setSuccessMsg('Email verified successfully! You can now complete your registration.');
+      } else {
+        setError(res.message || 'Invalid verification code.');
+      }
+    } catch (err) {
+      setOtpVerifyLoading(false);
+      setError(err.message || 'Failed to verify code. Please check your connection.');
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccessMsg('');
 
     if (!name || !email || !password || !confirmPassword || !state || !district) {
-      setError('Please fill in all fields.');
+      setError('Please fill in all required fields.');
       return;
     }
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+    if (!isEmailVerified) {
+      setError('Please verify your email address with the OTP sent to your inbox before proceeding.');
       return;
     }
 
     if (password.length < 6) {
       setError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
@@ -46,16 +147,16 @@ export default function Register() {
 
     setLoading(true);
     try {
-      const res = await register(email, password, name, state, district);
+      const res = await register(email, password, name, state, district, verificationToken);
       setLoading(false);
       if (res.success) {
         navigate('/dashboard');
       } else {
-        setError('Registration failed. Try again.');
+        setError(res.message || 'Registration failed. Please try again.');
       }
     } catch (err) {
       setLoading(false);
-      setError('Registration failed. Please check connection.');
+      setError(err.message || 'Registration failed. Please check your connection.');
     }
   };
 
@@ -88,6 +189,14 @@ export default function Register() {
           </p>
         </div>
 
+        {/* Success Alert */}
+        {successMsg && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl flex items-start space-x-2 text-xs">
+            <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-600" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
         {/* Error Alert */}
         {error && (
           <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl flex items-start space-x-2 text-xs">
@@ -111,18 +220,143 @@ export default function Register() {
               className="bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450"
             />
 
-            {/* Email Address */}
-            <Input
-              label="Email Address"
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
-              icon={Mail}
-              required
-              className="bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450"
-            />
+            {/* Email Address with Verification Button */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="email" className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Email Address
+                </label>
+                {isEmailVerified && (
+                  <span className="inline-flex items-center space-x-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <CheckCircle2 size={12} />
+                    <span>Verified</span>
+                  </span>
+                )}
+              </div>
+              <div className="flex space-x-2">
+                <div className="relative flex-1">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Mail size={16} />
+                  </div>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    disabled={isEmailVerified || isOtpSent}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    required
+                    className={`block w-full pl-9 pr-3 py-2.5 border rounded-xl text-xs h-[42px] transition-all ${
+                      isEmailVerified 
+                        ? 'bg-slate-100 border-emerald-300 text-slate-600 cursor-not-allowed'
+                        : isOtpSent
+                        ? 'bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed'
+                        : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-gov-purple'
+                    }`}
+                  />
+                </div>
+                {!isEmailVerified && (
+                  <button
+                    type="button"
+                    disabled={otpLoading || (isOtpSent && cooldown > 0)}
+                    onClick={handleRequestOtp}
+                    className="px-3.5 h-[42px] bg-gov-green hover:bg-gov-green-dark text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {otpLoading ? (
+                      <RefreshCw size={13} className="animate-spin" />
+                    ) : (
+                      <Send size={13} />
+                    )}
+                    <span>
+                      {isOtpSent 
+                        ? (cooldown > 0 ? `Resend (${cooldown}s)` : 'Resend OTP') 
+                        : 'Send OTP'}
+                    </span>
+                  </button>
+                )}
+              </div>
+              {!isEmailVerified && !isOtpSent && (
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Click "Send OTP" to receive a verification code on your email.
+                </p>
+              )}
+            </div>
+
+            {/* OTP Input & Verify Panel */}
+            {isOtpSent && !isEmailVerified && (
+              <div className="p-3.5 bg-slate-50 border border-gov-purple/20 rounded-xl space-y-2.5 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="otp" className="block text-xs font-bold text-slate-600">
+                    Enter 6-Digit Verification Code
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    {isDemoMode ? (
+                      <span className="text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        Demo Mode Active
+                      </span>
+                    ) : (
+                      <>Dispatched to <strong className="text-slate-600">{email}</strong></>
+                    )}
+                  </span>
+                </div>
+
+                {isDemoMode && (
+                  <div className="bg-amber-50/90 border border-amber-200 text-amber-800 px-3 py-2 rounded-xl text-xs flex items-start space-x-2">
+                    <span className="font-bold shrink-0">Terminal OTP:</span>
+                    <span>Check your running Flask backend terminal for the 6-digit code.</span>
+                  </div>
+                )}
+
+                <div className="flex space-x-2">
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <KeyRound size={16} />
+                    </div>
+                    <input
+                      id="otp"
+                      type="text"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="e.g. 123456"
+                      className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-900 font-mono tracking-widest text-center text-sm font-bold focus:outline-none focus:ring-2 focus:ring-gov-purple h-[40px]"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={otpVerifyLoading || otp.length !== 6}
+                    onClick={handleVerifyOtp}
+                    className="px-4 h-[40px] bg-gov-purple hover:bg-gov-purple-dark text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {otpVerifyLoading ? (
+                      <RefreshCw size={13} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={13} />
+                    )}
+                    <span>Verify Code</span>
+                  </button>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                  <span>Code expires in 5 minutes</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsOtpSent(false);
+                      setIsDemoMode(false);
+                      setOtp('');
+                    }}
+                    className="text-gov-purple hover:underline font-semibold"
+                  >
+                    Change Email
+                  </button>
+                </div>
+                {!isDemoMode && (
+                  <p className="text-[11px] text-slate-400 pt-0.5 border-t border-slate-100">
+                    Didn't receive the email? Check your spam folder or verify the email address was typed correctly.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* State & District Grid */}
             <div className="grid grid-cols-2 gap-4">
@@ -174,6 +408,7 @@ export default function Register() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="At least 6 characters"
               icon={Lock}
+              minLength={6}
               required
               className="bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450"
             />
@@ -187,6 +422,7 @@ export default function Register() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm password"
               icon={Lock}
+              minLength={6}
               required
               className="bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-450"
             />
@@ -209,19 +445,28 @@ export default function Register() {
           <div>
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || !isEmailVerified}
               variant="secondary"
-              className="w-full py-3 bg-gov-purple hover:bg-gov-purple-dark text-white font-bold"
+              className={`w-full py-3 text-white font-bold transition-all ${
+                isEmailVerified 
+                  ? 'bg-gov-purple hover:bg-gov-purple-dark' 
+                  : 'bg-slate-300 cursor-not-allowed hover:bg-slate-300 text-slate-500'
+              }`}
             >
               {loading ? (
                 <span>Creating Account...</span>
               ) : (
                 <div className="flex items-center justify-center space-x-1.5 w-full">
-                  <span>Create Account</span>
+                  <span>{isEmailVerified ? 'Create Account' : 'Verify Email to Register'}</span>
                   <ArrowRight size={14} />
                 </div>
               )}
             </Button>
+            {!isEmailVerified && (
+              <p className="mt-1.5 text-center text-[11px] text-slate-400">
+                You must verify your email address before creating your account.
+              </p>
+            )}
           </div>
         </form>
       </div>

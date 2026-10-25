@@ -1,10 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const db = require('./db');
+const path = require('path');
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from backend directory
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -46,6 +48,8 @@ app.use('/api/comparisons', require('./routes/comparisons'));
 app.use('/api/admin', require('./routes/admin'));
 
 // Mount routers that have paths starting with /api/users or directly in /api
+app.use('/api', require('./routes/public'));
+app.use('/api/public', require('./routes/public'));
 app.use('/api', require('./routes/favorites'));
 app.use('/api', require('./routes/recentlyViewed'));
 app.use('/api', require('./routes/notifications'));

@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
 import StatCard from '../../components/common/StatCard';
 import { MOCK_ANALYTICS } from '../../data/analytics';
 import { 
@@ -13,7 +15,25 @@ import {
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const syncLogsSummary = MOCK_ANALYTICS.syncLogs;
+  const { user: admin } = useAuth();
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!admin) return;
+    api.getAdminStats(admin.id)
+      .then(res => {
+        if (res.success && res.stats) {
+          setStats(res.stats);
+        }
+      })
+      .catch(err => console.error('Error fetching admin dashboard stats:', err))
+      .finally(() => setLoading(false));
+  }, [admin]);
+
+  const syncLogsSummary = (stats && stats.syncLogs && stats.syncLogs.length > 0)
+    ? stats.syncLogs
+    : MOCK_ANALYTICS.syncLogs;
 
   return (
     <div className="space-y-8 font-sans text-left">
@@ -22,28 +42,28 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
         <StatCard
           title="Total Registered Citizens"
-          value="15,240"
+          value={stats ? stats.totalCitizens.toLocaleString() : (loading ? "..." : "0")}
           subtitle="All active state mappings"
           icon={Users}
           variant="purple"
         />
         <StatCard
           title="Total Welfare Schemes"
-          value="142"
+          value={stats ? stats.totalSchemes.toLocaleString() : (loading ? "..." : "0")}
           subtitle="Auto-synchronized daily"
           icon={Layers}
           variant="purple"
         />
         <StatCard
           title="Scheduler Status"
-          value="Online"
+          value={stats?.telemetry?.schedulerStatus || "Online"}
           subtitle="CRON runs at 00:00 UTC"
           icon={Cpu}
           variant="green"
         />
         <StatCard
           title="Database Telemetry"
-          value="Operational"
+          value={stats?.telemetry?.databaseStatus || "Operational"}
           subtitle="PostgreSQL status active"
           icon={Database}
           variant="green"

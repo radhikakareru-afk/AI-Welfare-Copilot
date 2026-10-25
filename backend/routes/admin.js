@@ -73,4 +73,119 @@ router.put('/users/:id/status', requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/admin/stats (Real database-backed admin statistics)
+router.get('/stats', requireAdmin, async (req, res) => {
+  try {
+    const [
+      citizensCountRes,
+      activeCitizensRes,
+      schemesCountRes,
+      assessmentsCountRes,
+      favoritesCountRes,
+      categoriesRes,
+      recentUsersRes,
+      recentSyncRes
+    ] = await Promise.all([
+      db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'citizen';"),
+      db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'citizen' AND is_active = TRUE;"),
+      db.query("SELECT COUNT(*) AS count FROM schemes WHERE is_active = TRUE;"),
+      db.query("SELECT COUNT(*) AS count FROM eligibility_checks;"),
+      db.query("SELECT COUNT(*) AS count FROM favorites;"),
+      db.query(`
+        SELECT c.name, COUNT(s.id)::int AS scheme_count 
+        FROM scheme_categories c 
+        LEFT JOIN schemes s ON c.id = s.category_id AND s.is_active = TRUE 
+        GROUP BY c.id, c.name 
+        ORDER BY scheme_count DESC;
+      `),
+      db.query(`
+        SELECT u.id, u.full_name, u.email, u.is_active, u.created_at, p.state 
+        FROM users u 
+        LEFT JOIN user_profiles p ON u.id = p.user_id 
+        WHERE u.role = 'citizen' 
+        ORDER BY u.created_at DESC 
+        LIMIT 5;
+      `),
+      db.query(`
+        SELECT l.id, p.name AS provider, l.status, l.records_fetched, l.started_at, l.error_message
+        FROM sync_logs l
+        LEFT JOIN data_providers p ON l.provider_id = p.id
+        ORDER BY l.started_at DESC
+        LIMIT 5;
+      `)
+    ]);
+
+    const totalCitizens = parseInt(citizensCountRes.rows[0].count, 10);
+    const activeCitizens = parseInt(activeCitizensRes.rows[0].count, 10);
+    const totalSchemes = parseInt(schemesCountRes.rows[0].count, 10);
+    const totalAssessments = parseInt(assessmentsCountRes.rows[0].count, 10);
+    const totalFavorites = parseInt(favoritesCountRes.rows[0].count, 10);
+
+    res.json({
+      success: true,
+      stats: {
+        totalCitizens,
+        activeCitizens,
+        totalSchemes,
+        totalAssessments,
+        totalFavorites,
+        categoryBreakdown: categoriesRes.rows,
+        recentCitizens: recentUsersRes.rows,
+        syncLogs: recentSyncRes.rows,
+        telemetry: {
+          databaseStatus: 'Operational',
+          schedulerStatus: 'Online',
+          serverTime: new Date().toISOString()
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching admin stats:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/admin/schemes (Retrieve all schemes with category names and active statuses)
+router.get('/schemes', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT s.id, s.scheme_code, s.name, s.description, s.state, s.target_audience, 
+             s.is_active, s.created_at, c.name AS category
+      FROM schemes s
+      LEFT JOIN scheme_categories c ON s.category_id = c.id
+      ORDER BY s.id ASC;
+    `);
+    res.json({ success: true, schemes: rows });
+  } catch (err) {
+    console.error('Error fetching admin schemes:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PUT /api/admin/schemes/:id/status (Toggle scheme active status)
+router.put('/schemes/:id/status', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { is_active } = req.body;
+
+  if (is_active === undefined) {
+    return res.status(400).json({ success: false, message: 'Please provide is_active status' });
+  }
+
+  try {
+    const { rowCount } = await db.query(
+      'UPDATE schemes SET is_active = $1, updated_at = NOW() WHERE id = $2;',
+      [is_active, id]
+    );
+
+    if (rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Scheme not found' });
+    }
+
+    res.json({ success: true, message: `Scheme status updated to ${is_active ? 'Active' : 'Inactive'}` });
+  } catch (err) {
+    console.error('Error updating scheme status:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

@@ -116,6 +116,7 @@ export default function Register() {
                 <input
                   id="password"
                   type="password"
+                  minLength={6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="block w-full pl-10 pr-3 py-3 border border-slate-800 rounded-xl bg-slate-950/50 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gov-saffron focus:border-transparent text-sm transition-all"
@@ -136,6 +137,7 @@ export default function Register() {
                 <input
                   id="confirm-password"
                   type="password"
+                  minLength={6}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="block w-full pl-10 pr-3 py-3 border border-slate-800 rounded-xl bg-slate-950/50 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gov-saffron focus:border-transparent text-sm transition-all"

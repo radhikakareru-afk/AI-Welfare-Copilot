@@ -43,6 +43,10 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Please provide email, password, and full name' });
   }
 
+  if (password.length < 6) {
+    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long.' });
+  }
+
   try {
     const cleanEmail = email.trim().toLowerCase();
     // Check if user exists

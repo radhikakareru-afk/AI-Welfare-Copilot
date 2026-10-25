@@ -1,9 +1,32 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
 import { MOCK_ANALYTICS } from '../../data/analytics';
 import { TrendingUp, BarChart2, PieChart, Map, Award } from 'lucide-react';
 
 export default function AnalyticsReports() {
+  const { user: admin } = useAuth();
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    if (!admin) return;
+    api.getAdminStats(admin.id)
+      .then(res => {
+        if (res.success && res.stats) {
+          setStats(res.stats);
+        }
+      })
+      .catch(err => console.error('Error fetching analytics reports stats:', err));
+  }, [admin]);
+
   const analytics = MOCK_ANALYTICS;
+
+  const popularCategories = (stats && stats.categoryBreakdown && stats.categoryBreakdown.length > 0)
+    ? stats.categoryBreakdown.map(c => ({
+        name: c.name,
+        percentage: stats.totalSchemes > 0 ? Math.round((c.scheme_count / stats.totalSchemes) * 100) : 0
+      }))
+    : analytics.popularCategories;
 
   return (
     <div className="space-y-8 font-sans text-left">
@@ -29,7 +52,7 @@ export default function AnalyticsReports() {
           </h3>
 
           <div className="space-y-4 text-xs font-semibold">
-            {analytics.popularCategories.map((c, i) => (
+            {popularCategories.map((c, i) => (
               <div key={i} className="space-y-1.5">
                 <div className="flex justify-between items-center text-[11px]">
                   <span className="text-slate-700">{c.name}</span>

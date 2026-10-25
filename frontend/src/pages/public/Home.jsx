@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
 import { 
   CheckSquare, 
   Search, 
@@ -16,6 +17,35 @@ import {
 
 export default function Home() {
   const { user } = useAuth();
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getPublicStatistics()
+      .then(res => {
+        if (!isMounted) return;
+        if (res.success && res.data) {
+          setStats(res.data);
+          setError(null);
+        } else {
+          setError(res.error || 'Failed to load statistics');
+        }
+      })
+      .catch(err => {
+        if (!isMounted) return;
+        console.error('Error fetching public statistics:', err);
+        setError('Database statistics temporarily unavailable');
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="bg-white min-h-screen relative overflow-hidden font-sans">
@@ -62,22 +92,67 @@ export default function Home() {
           {/* Quick stats banner */}
           <div className="mt-16 pt-10 border-t border-slate-800/80 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto text-center">
             <div>
-              <span className="block text-3xl font-extrabold text-white">140+</span>
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Welfare Schemes</span>
+              {loading ? (
+                <span className="block text-3xl font-extrabold text-slate-500 animate-pulse">—</span>
+              ) : error ? (
+                <span className="block text-3xl font-extrabold text-slate-400" title="Statistics unavailable">—</span>
+              ) : (
+                <span className="block text-3xl font-extrabold text-white">
+                  {stats?.schemes?.formatted || '0'}
+                </span>
+              )}
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                {stats?.schemes?.label || 'Welfare Schemes'}
+              </span>
             </div>
             <div>
-              <span className="block text-3xl font-extrabold text-white">28</span>
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">States Supported</span>
+              {loading ? (
+                <span className="block text-3xl font-extrabold text-slate-500 animate-pulse">—</span>
+              ) : error ? (
+                <span className="block text-3xl font-extrabold text-slate-400" title="Statistics unavailable">—</span>
+              ) : (
+                <span className="block text-3xl font-extrabold text-white">
+                  {stats?.states?.formatted || '0'}
+                </span>
+              )}
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                {stats?.states?.label || 'States Supported'}
+              </span>
             </div>
             <div>
-              <span className="block text-3xl font-extrabold text-white">15K+</span>
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Registered Users</span>
+              {loading ? (
+                <span className="block text-3xl font-extrabold text-slate-500 animate-pulse">—</span>
+              ) : error ? (
+                <span className="block text-3xl font-extrabold text-slate-400" title="Statistics unavailable">—</span>
+              ) : (
+                <span className="block text-3xl font-extrabold text-white">
+                  {stats?.citizens?.formatted || '0'}
+                </span>
+              )}
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                {stats?.citizens?.label || 'Registered Users'}
+              </span>
             </div>
             <div>
-              <span className="block text-3xl font-extrabold text-white">100%</span>
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Auto-Synchronized</span>
+              {loading ? (
+                <span className="block text-3xl font-extrabold text-slate-500 animate-pulse">—</span>
+              ) : error ? (
+                <span className="block text-3xl font-extrabold text-slate-400" title="Statistics unavailable">—</span>
+              ) : (
+                <span className="block text-3xl font-extrabold text-white">
+                  {stats?.synchronization?.formatted || 'Standby'}
+                </span>
+              )}
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                {stats?.synchronization?.label || 'Auto-Synchronized'}
+              </span>
             </div>
           </div>
+          {error && !loading && (
+            <p className="mt-4 text-[11px] text-slate-400 text-center font-medium">
+              Live database statistics temporarily unavailable.
+            </p>
+          )}
         </div>
       </section>
 

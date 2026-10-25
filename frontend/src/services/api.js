@@ -1,4 +1,5 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:5001';
 
 async function request(path, options = {}) {
   const headers = {
@@ -13,7 +14,32 @@ async function request(path, options = {}) {
 
   const result = await response.json();
   if (!response.ok) {
-    throw new Error(result.message || `Request failed with status ${response.status}`);
+    const error = new Error(result.message || `Request failed with status ${response.status}`);
+    error.status = response.status;
+    error.data = result;
+    throw error;
+  }
+
+  return result;
+}
+
+async function authRequest(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  const response = await fetch(`${AUTH_API_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  const result = await response.json();
+  if (!response.ok) {
+    const error = new Error(result.message || `Request failed with status ${response.status}`);
+    error.status = response.status;
+    error.data = result;
+    throw error;
   }
 
   return result;
@@ -22,20 +48,32 @@ async function request(path, options = {}) {
 export const api = {
   // Test Database Connection
   testDb: () => request('/api/test-db'),
+  testAuthDb: () => authRequest('/api/auth/test-db'),
+
+  // Public Platform Statistics
+  getPublicStatistics: () => request('/api/public/statistics'),
 
   // Schemes
   getSchemes: () => request('/api/schemes'),
   getScheme: (id) => request(`/api/schemes/${id}`),
   getCategories: () => request('/api/categories'),
 
-  // Auth & Profile
-  login: (email, password) => request('/api/users/login', {
+  // Auth (Python Flask Backend)
+  requestOtp: (email) => authRequest('/api/auth/request-otp', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  }),
+  verifyOtp: (email, otp) => authRequest('/api/auth/verify-otp', {
+    method: 'POST',
+    body: JSON.stringify({ email, otp }),
+  }),
+  login: (email, password) => authRequest('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   }),
-  register: (email, password, full_name, state, district) => request('/api/users', {
+  register: (email, password, full_name, state, district, verification_token) => authRequest('/api/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password, full_name, state, district }),
+    body: JSON.stringify({ email, password, full_name, state, district, verification_token }),
   }),
   getUser: (id) => request(`/api/users/${id}`),
   getProfile: (userId) => request(`/api/users/${userId}/profile`),
@@ -49,6 +87,17 @@ export const api = {
     headers: { 'x-user-id': String(adminId) }
   }),
   updateUserStatus: (adminId, userId, isActive) => request(`/api/admin/users/${userId}/status`, {
+    method: 'PUT',
+    headers: { 'x-user-id': String(adminId) },
+    body: JSON.stringify({ is_active: isActive }),
+  }),
+  getAdminStats: (adminId) => request('/api/admin/stats', {
+    headers: { 'x-user-id': String(adminId) }
+  }),
+  getAdminSchemes: (adminId) => request('/api/admin/schemes', {
+    headers: { 'x-user-id': String(adminId) }
+  }),
+  updateSchemeStatus: (adminId, schemeId, isActive) => request(`/api/admin/schemes/${schemeId}/status`, {
     method: 'PUT',
     headers: { 'x-user-id': String(adminId) },
     body: JSON.stringify({ is_active: isActive }),

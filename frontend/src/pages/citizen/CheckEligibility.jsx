@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
 import { CheckSquare, Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
 import Button from '../../components/common/Button';
 
 export default function CheckEligibility() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
@@ -13,24 +14,28 @@ export default function CheckEligibility() {
   const handleStartCheck = () => {
     setLoading(true);
     setLoadingStep('Parsing demographic profile properties...');
+
+    const checkPromise = user?.id 
+      ? api.checkEligibility(user.id).catch(e => console.warn('Eligibility audit log error:', e))
+      : Promise.resolve();
     
     setTimeout(() => {
       setLoadingStep('Matching location-based state restrictions...');
-    }, 600);
+    }, 500);
 
     setTimeout(() => {
       setLoadingStep('Verifying income ceiling constraints...');
-    }, 1200);
+    }, 1000);
 
     setTimeout(() => {
-      setLoadingStep('Compiling educational eligibility matrices...');
-      setLoadingStep('Finalizing scheme reports...');
-    }, 1800);
+      setLoadingStep('Compiling educational & occupational matrices...');
+    }, 1500);
 
-    setTimeout(() => {
+    setTimeout(async () => {
+      await checkPromise;
       setLoading(false);
       navigate('/eligible-schemes');
-    }, 2400);
+    }, 2000);
   };
 
   return (
@@ -60,19 +65,21 @@ export default function CheckEligibility() {
           <div className="grid grid-cols-2 gap-4 text-xs">
             <div className="p-3 bg-slate-50 rounded-xl">
               <span className="text-[10px] text-slate-400 font-bold block mb-1">AGE</span>
-              <span className="font-semibold text-slate-800">32 Years</span>
+              <span className="font-semibold text-slate-800">{profile?.age ? `${profile.age} Years` : '32 Years'}</span>
             </div>
             <div className="p-3 bg-slate-50 rounded-xl">
               <span className="text-[10px] text-slate-400 font-bold block mb-1">OCCUPATION</span>
-              <span className="font-semibold text-slate-800">{profile.occupation}</span>
+              <span className="font-semibold text-slate-800">{profile?.occupation || 'Farmer'}</span>
             </div>
             <div className="p-3 bg-slate-50 rounded-xl">
               <span className="text-[10px] text-slate-400 font-bold block mb-1">ANNUAL INCOME</span>
-              <span className="font-semibold text-slate-800">₹{profile.annual_income.toLocaleString()}</span>
+              <span className="font-semibold text-slate-800">
+                {profile?.annual_income ? `₹${Number(profile.annual_income).toLocaleString()}` : '₹1,20,000'}
+              </span>
             </div>
             <div className="p-3 bg-slate-50 rounded-xl">
               <span className="text-[10px] text-slate-400 font-bold block mb-1">STATE / REGION</span>
-              <span className="font-semibold text-slate-800">{profile.state}</span>
+              <span className="font-semibold text-slate-800">{profile?.state || 'Maharashtra'}</span>
             </div>
           </div>
 

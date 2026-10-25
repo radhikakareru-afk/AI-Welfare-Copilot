@@ -44,9 +44,6 @@ export default function Navbar() {
                 <span className="font-extrabold text-xl tracking-tight text-gov-dark font-sans leading-tight">
                   AI Welfare <span className="text-gov-purple">Copilot</span>
                 </span>
-                <span className="text-[10px] text-gov-green font-bold tracking-wider uppercase">
-                  Welfare Portal Demo
-                </span>
               </div>
             </Link>
           </div>

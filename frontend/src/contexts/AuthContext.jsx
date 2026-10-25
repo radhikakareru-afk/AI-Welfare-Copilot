@@ -108,16 +108,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (email, password, fullName, state, district) => {
+  const register = async (email, password, fullName, state, district, verificationToken) => {
     try {
-      const res = await api.register(email, password, fullName, state, district);
+      const res = await api.register(email, password, fullName, state, district, verificationToken);
       if (res.success && res.user) {
         setUser(res.user);
         return { success: true, user: res.user };
       }
-      return { success: false, message: 'Registration failed' };
+      return { success: false, message: res.message || 'Registration failed' };
     } catch (err) {
-      return { success: false, message: err.message };
+      return { success: false, message: err.message || 'Registration failed' };
     }
   };
 

@@ -1,11 +1,70 @@
-import React from 'react';
-import { HeartPulse, Database, Server, Cpu, ShieldAlert } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { HeartPulse, Database, Server, Cpu, CheckCircle2, ShieldAlert } from 'lucide-react';
+import api from '../../services/api';
 
 export default function SystemHealth() {
+  const [dbStatus, setDbStatus] = useState({ loading: true, active: false, detail: 'Checking connection...' });
+  const [flaskStatus, setFlaskStatus] = useState({ loading: true, active: false, detail: 'Checking connection...' });
+
+  useEffect(() => {
+    // Probe Express + DB
+    api.testDb()
+      .then(res => {
+        if (res.success) {
+          setDbStatus({ loading: false, active: true, detail: 'PostgreSQL database connected (Port 5432)' });
+        } else {
+          setDbStatus({ loading: false, active: false, detail: res.message || 'Connection failed' });
+        }
+      })
+      .catch(err => {
+        setDbStatus({ loading: false, active: false, detail: 'Express API unreachable' });
+      });
+
+    // Probe Flask + DB
+    api.testAuthDb()
+      .then(res => {
+        if (res.success) {
+          setFlaskStatus({ loading: false, active: true, detail: 'Flask OTP & auth service online (Port 5001)' });
+        } else {
+          setFlaskStatus({ loading: false, active: false, detail: res.message || 'Auth service degraded' });
+        }
+      })
+      .catch(err => {
+        setFlaskStatus({ loading: false, active: false, detail: 'Flask Auth service unreachable' });
+      });
+  }, []);
+
   const systems = [
-    { name: 'FastAPI Backend Engine', status: 'Inactive', detail: 'Mock response framework active', icon: Server, color: 'text-amber-500 bg-amber-500/10 border-amber-500/30' },
-    { name: 'PostgreSQL Database Node', status: 'Inactive', detail: 'Local sandbox storage active', icon: Database, color: 'text-amber-500 bg-amber-500/10 border-amber-500/30' },
-    { name: 'Celery CRON Scheduler', status: 'Inactive', detail: 'Runs inside mock clock thread', icon: Cpu, color: 'text-amber-500 bg-amber-500/10 border-amber-500/30' }
+    { 
+      name: 'Python Flask Auth Engine', 
+      status: flaskStatus.loading ? 'Checking...' : (flaskStatus.active ? 'Active' : 'Offline'), 
+      detail: flaskStatus.detail, 
+      icon: Server, 
+      color: flaskStatus.active 
+        ? 'text-emerald-600 bg-emerald-500/10 border-emerald-500/30' 
+        : 'text-amber-500 bg-amber-500/10 border-amber-500/30',
+      badgeColor: flaskStatus.active ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+    },
+    { 
+      name: 'PostgreSQL Database Node', 
+      status: dbStatus.loading ? 'Checking...' : (dbStatus.active ? 'Active' : 'Offline'), 
+      detail: dbStatus.detail, 
+      icon: Database, 
+      color: dbStatus.active 
+        ? 'text-emerald-600 bg-emerald-500/10 border-emerald-500/30' 
+        : 'text-amber-500 bg-amber-500/10 border-amber-500/30',
+      badgeColor: dbStatus.active ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+    },
+    { 
+      name: 'Core Express Backend Engine', 
+      status: dbStatus.loading ? 'Checking...' : (dbStatus.active ? 'Active' : 'Offline'), 
+      detail: 'Core REST API operational (Port 5000)', 
+      icon: Cpu, 
+      color: dbStatus.active 
+        ? 'text-emerald-600 bg-emerald-500/10 border-emerald-500/30' 
+        : 'text-amber-500 bg-amber-500/10 border-amber-500/30',
+      badgeColor: dbStatus.active ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+    }
   ];
 
   return (
@@ -22,10 +81,16 @@ export default function SystemHealth() {
         </p>
       </div>
 
-      <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-200 text-amber-950 flex items-start space-x-2 text-xs max-w-xl">
-        <ShieldAlert size={16} className="text-amber-600 shrink-0 mt-0.5" />
+      <div className={`${dbStatus.active && flaskStatus.active ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950' : 'bg-amber-50/50 border-amber-200 text-amber-950'} p-4 rounded-xl border flex items-start space-x-2 text-xs max-w-xl`}>
+        {dbStatus.active && flaskStatus.active ? (
+          <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+        ) : (
+          <ShieldAlert size={16} className="text-amber-600 shrink-0 mt-0.5" />
+        )}
         <p className="leading-relaxed font-semibold">
-          Frontend Development Mode is active. Backend services are bypass-simulated.
+          {dbStatus.active && flaskStatus.active
+            ? 'All microservices and database connections are operational and synchronized.'
+            : 'Connecting to background telemetry services...'}
         </p>
       </div>
 
@@ -42,7 +107,7 @@ export default function SystemHealth() {
                 <div className={`p-2.5 rounded-xl border ${s.color}`}>
                   <Icon size={20} />
                 </div>
-                <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-amber-100 text-amber-800">
+                <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase ${s.badgeColor}`}>
                   {s.status}
                 </span>
               </div>

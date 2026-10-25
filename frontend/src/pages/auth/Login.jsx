@@ -50,15 +50,11 @@ export default function Login() {
           }
         }
       } else {
-        if (activeTab === 'citizen') {
-          setError('Invalid citizen email or password.');
-        } else {
-          setError('Invalid admin email or password.');
-        }
+        setError(res.message || (activeTab === 'citizen' ? 'Invalid citizen email or password.' : 'Invalid admin email or password.'));
       }
     } catch (err) {
       setLoading(false);
-      setError('Failed to login. Please check connection.');
+      setError(err.message || 'Failed to login. Please check connection.');
     }
   };
 
