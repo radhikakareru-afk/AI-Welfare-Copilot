@@ -7,6 +7,7 @@ const path = require('path');
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const db = require('./db');
+const syncScheduler = require('./app/scheduler/syncScheduler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -125,7 +126,20 @@ async function seedDemoUsers() {
 }
 
 // Start Server
-app.listen(PORT, '0.0.0.0', async () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server is running on port ${PORT}`);
   await seedDemoUsers();
+  syncScheduler.init();
 });
+
+const gracefulShutdown = (signal) => {
+  console.log(`Received ${signal}. Shutting down server gracefully...`);
+  syncScheduler.stop();
+  server.close(() => {
+    console.log('HTTP server closed.');
+    process.exit(0);
+  });
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

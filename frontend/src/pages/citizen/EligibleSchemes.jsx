@@ -39,9 +39,26 @@ export default function EligibleSchemes() {
       });
   }, []);
 
-  // Dynamically build categories from schemes
+  // Dynamically build categories from schemes with priority ordering
   const categories = useMemo(() => {
-    return ['All', ...new Set(schemes.map(s => s.category))];
+    const set = new Set();
+    const priorityCategories = [
+      'Farmers and Agriculture',
+      'Education and Scholarships',
+      'Maharashtra State Schemes',
+      'Women and Women Empowerment'
+    ];
+    schemes.forEach(s => {
+      if (s.category) set.add(s.category);
+    });
+    set.add('Maharashtra State Schemes');
+    
+    const uniqueFromSchemes = Array.from(set);
+    const ordered = [
+      ...priorityCategories.filter(p => uniqueFromSchemes.includes(p) || p === 'Maharashtra State Schemes'),
+      ...uniqueFromSchemes.filter(c => !priorityCategories.includes(c)).sort()
+    ];
+    return ['All', ...ordered];
   }, [schemes]);
 
   // Filter schemes to show ONLY eligible & partially eligible
@@ -58,11 +75,24 @@ export default function EligibleSchemes() {
       const isQualified = status === 'eligible' || status === 'partially_eligible';
       
       // Text Search
-      const searchStr = `${scheme.name} ${scheme.tagline || ''} ${scheme.description || ''} ${scheme.department || ''}`.toLowerCase();
+      const searchStr = `${scheme.name} ${scheme.tagline || ''} ${scheme.description || ''} ${scheme.department || ''} ${scheme.category || ''} ${scheme.state || ''}`.toLowerCase();
       const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
 
       // Category filter
-      const matchesCategory = selectedCategory === 'All' || scheme.category === selectedCategory;
+      let matchesCategory = true;
+      if (selectedCategory !== 'All') {
+        if (selectedCategory === 'Maharashtra State Schemes') {
+          matchesCategory = scheme.state === 'Maharashtra' || scheme.category === 'Maharashtra State Schemes';
+        } else if (selectedCategory === 'Farmers and Agriculture') {
+          matchesCategory = scheme.category === 'Farmers and Agriculture' || scheme.category === 'Farmers';
+        } else if (selectedCategory === 'Education and Scholarships') {
+          matchesCategory = scheme.category === 'Education and Scholarships' || scheme.category === 'Education';
+        } else if (selectedCategory === 'Women and Women Empowerment') {
+          matchesCategory = scheme.category === 'Women and Women Empowerment' || scheme.category === 'Women';
+        } else {
+          matchesCategory = scheme.category === selectedCategory;
+        }
+      }
 
       return isQualified && matchesSearch && matchesCategory;
     });

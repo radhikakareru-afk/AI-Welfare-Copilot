@@ -121,7 +121,14 @@ function evaluateEligibilityForScheme(profile, scheme, criteria) {
         break;
       }
       case 'state': {
-        const isStateMatch = profile.state && profile.state.toLowerCase() === value.toLowerCase();
+        const allowedStates = value.split(',').map(s => s.trim().toLowerCase());
+        const userState = (profile.state || '').trim().toLowerCase();
+        const isStateMatch = userState && (
+          allowedStates.includes(userState) ||
+          allowedStates.includes('all') ||
+          allowedStates.includes('all india') ||
+          allowedStates.includes('central')
+        );
         if (!isStateMatch) {
           failures.push(`Resides in ${profile.state || 'not specified'}, but the scheme requires state: ${value}.`);
         } else {
@@ -130,7 +137,9 @@ function evaluateEligibilityForScheme(profile, scheme, criteria) {
         break;
       }
       case 'district': {
-        const isDistrictMatch = profile.district && profile.district.toLowerCase() === value.toLowerCase();
+        const allowedDistricts = value.split(',').map(d => d.trim().toLowerCase());
+        const userDistrict = (profile.district || '').trim().toLowerCase();
+        const isDistrictMatch = userDistrict && allowedDistricts.includes(userDistrict);
         if (!isDistrictMatch) {
           failures.push(`Resides in ${profile.district || 'not specified'}, but the scheme requires district: ${value}.`);
         } else {
@@ -139,7 +148,14 @@ function evaluateEligibilityForScheme(profile, scheme, criteria) {
         break;
       }
       case 'gender': {
-        const isGenderMatch = profile.gender && profile.gender.toLowerCase() === value.toLowerCase();
+        const allowedGenders = value.split(',').map(g => g.trim().toLowerCase());
+        const userGender = (profile.gender || '').trim().toLowerCase();
+        const isGenderMatch = allowedGenders.some(g => {
+          if (g === userGender) return true;
+          if ((g === 'female' || g === 'women' || g === 'woman') && userGender === 'female') return true;
+          if ((g === 'male' || g === 'men' || g === 'man') && userGender === 'male') return true;
+          return false;
+        });
         if (!isGenderMatch) {
           failures.push(`Gender is ${profile.gender || 'not specified'}, but the scheme targets: ${value}.`);
         } else {
@@ -148,7 +164,9 @@ function evaluateEligibilityForScheme(profile, scheme, criteria) {
         break;
       }
       case 'category': {
-        const isCategoryMatch = profile.category && profile.category.toLowerCase() === value.toLowerCase();
+        const allowedCategories = value.split(',').map(c => c.trim().toLowerCase());
+        const userCategory = (profile.category || '').trim().toLowerCase();
+        const isCategoryMatch = userCategory && allowedCategories.includes(userCategory);
         if (!isCategoryMatch) {
           failures.push(`Caste category is ${profile.category || 'not specified'}, but the scheme is restricted to: ${value}.`);
         } else {
@@ -166,7 +184,9 @@ function evaluateEligibilityForScheme(profile, scheme, criteria) {
         break;
       }
       case 'occupation': {
-        const isOccupationMatch = profile.occupation && profile.occupation.toLowerCase() === value.toLowerCase();
+        const allowedOccupations = value.split(',').map(o => o.trim().toLowerCase());
+        const userOccupation = (profile.occupation || '').trim().toLowerCase();
+        const isOccupationMatch = userOccupation && allowedOccupations.includes(userOccupation);
         if (!isOccupationMatch) {
           partialFailures.push(`Occupation is ${profile.occupation || 'not specified'}, but the scheme targets: ${value}.`);
         } else {
@@ -175,7 +195,9 @@ function evaluateEligibilityForScheme(profile, scheme, criteria) {
         break;
       }
       case 'education': {
-        const isEducationMatch = profile.education && profile.education.toLowerCase() === value.toLowerCase();
+        const allowedEducations = value.split(',').map(e => e.trim().toLowerCase());
+        const userEducation = (profile.education || '').trim().toLowerCase();
+        const isEducationMatch = userEducation && allowedEducations.includes(userEducation);
         if (!isEducationMatch) {
           partialFailures.push(`Education is ${profile.education || 'not specified'}, but the scheme requires: ${value}.`);
         } else {

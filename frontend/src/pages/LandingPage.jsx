@@ -139,8 +139,8 @@ export default function LandingPage() {
               ) : error ? (
                 <span className="block text-3xl font-extrabold text-slate-400" title="Statistics unavailable">—</span>
               ) : (
-                <span className="block text-3xl font-extrabold text-white">
-                  {stats?.synchronization?.formatted || 'Standby'}
+                <span className="block text-3xl font-extrabold text-white" title={stats?.synchronization?.detail || 'Catalog Synchronization Status'}>
+                  {stats?.synchronization?.formatted || 'Inactive'}
                 </span>
               )}
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">

@@ -119,6 +119,9 @@ router.get('/', async (req, res) => {
         // Fetch criteria
         const critRes = await db.query('SELECT * FROM scheme_eligibility_criteria WHERE scheme_id = $1', [s.id]);
         const rules = getRulesFromCriteria(critRes.rows);
+        if (s.state && (!rules.states_allowed || rules.states_allowed.length === 0)) {
+          rules.states_allowed = [s.state];
+        }
 
         return {
           ...s,
@@ -170,6 +173,9 @@ router.get('/:id', async (req, res) => {
     // Fetch criteria and map rules
     const critRes = await db.query('SELECT * FROM scheme_eligibility_criteria WHERE scheme_id = $1', [id]);
     scheme.rules = getRulesFromCriteria(critRes.rows);
+    if (scheme.state && (!scheme.rules.states_allowed || scheme.rules.states_allowed.length === 0)) {
+      scheme.rules.states_allowed = [scheme.state];
+    }
 
     // Fetch documents
     const docRes = await db.query('SELECT document_name, is_mandatory FROM scheme_documents WHERE scheme_id = $1', [id]);

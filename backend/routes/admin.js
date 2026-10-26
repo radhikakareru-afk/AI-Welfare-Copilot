@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const syncScheduler = require('../app/scheduler/syncScheduler');
+const providerRegistry = require('../app/providers');
 
 // Middleware to authorize admin requests securely using database lookup
 const requireAdmin = async (req, res, next) => {
@@ -184,6 +186,83 @@ router.put('/schemes/:id/status', requireAdmin, async (req, res) => {
     res.json({ success: true, message: `Scheme status updated to ${is_active ? 'Active' : 'Inactive'}` });
   } catch (err) {
     console.error('Error updating scheme status:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/admin/sync (Execute genuine catalog synchronization via SyncScheduler)
+router.post('/sync', requireAdmin, async (req, res) => {
+  const adminId = req.headers['x-user-id'] || 'admin';
+  try {
+    const result = await syncScheduler.runSync({
+      syncType: 'manual',
+      triggeredBy: adminId
+    });
+
+    if (result.code === 'SYNC_IN_PROGRESS') {
+      return res.status(409).json({
+        success: false,
+        message: result.message,
+        startedAt: result.startedAt
+      });
+    }
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.message || 'Synchronization failed',
+        error: result.error,
+        summary: result
+      });
+    }
+
+    res.json({
+      success: true,
+      message: result.message,
+      syncLogId: result.syncLogId,
+      recordsSynchronized: result.recordsUpdated,
+      recordsFetched: result.recordsFetched,
+      durationSeconds: result.durationSeconds,
+      provider: result.providerName || 'Official Government Platforms'
+    });
+  } catch (err) {
+    console.error('Error during synchronization:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/admin/sync/status (Retrieve real-time scheduler state and provider health diagnostics)
+router.get('/sync/status', requireAdmin, async (req, res) => {
+  try {
+    const schedulerState = syncScheduler.getStatus();
+    const providerStatuses = await providerRegistry.getAllStatus();
+
+    res.json({
+      success: true,
+      scheduler: schedulerState,
+      providers: providerStatuses
+    });
+  } catch (err) {
+    console.error('Error fetching admin sync status:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/admin/sync/logs (Retrieve audit history from PostgreSQL)
+router.get('/sync/logs', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT l.id, p.name AS provider, l.sync_type, l.status, 
+             l.records_fetched, l.records_updated, l.records_inserted, l.records_failed,
+             l.started_at, l.ended_at, l.duration_seconds, l.error_message
+      FROM sync_logs l
+      LEFT JOIN data_providers p ON l.provider_id = p.id
+      ORDER BY l.started_at DESC
+      LIMIT 50;
+    `);
+    res.json({ success: true, logs: rows });
+  } catch (err) {
+    console.error('Error fetching sync logs:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

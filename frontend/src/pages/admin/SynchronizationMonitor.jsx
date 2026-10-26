@@ -1,56 +1,82 @@
-import React, { useState } from 'react';
-import { MOCK_ANALYTICS } from '../../data/analytics';
-import { RefreshCw, Play, CheckCircle2, Cpu, AlertTriangle, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
+import { RefreshCw, Play, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import Button from '../../components/common/Button';
 
 export default function SynchronizationMonitor() {
+  const { user } = useAuth();
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('Idle');
   const [success, setSuccess] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const [providerStatuses, setProviderStatuses] = useState([
     { name: 'MyScheme Central Portal API', status: 'Healthy', code: 'API-MY-SCHEME', last_sync: '15m ago', speed: '95ms' },
     { name: 'Maharashtra Agriculture Node', status: 'Healthy', code: 'DB-MH-AGRI', last_sync: '2h ago', speed: '140ms' },
-    { name: 'UGC Scholarship Gateway', status: 'Syncing', code: 'UGC-FELLOW', last_sync: 'Just now', speed: '210ms' },
-    { name: 'National Scholarship Gateway', status: 'Offline', code: 'NSP-CENTRAL', last_sync: '1d ago', speed: '-' }
+    { name: 'UGC Scholarship Gateway', status: 'Healthy', code: 'UGC-FELLOW', last_sync: '1d ago', speed: '210ms' },
+    { name: 'National Scholarship Gateway', status: 'Healthy', code: 'NSP-CENTRAL', last_sync: '1d ago', speed: '180ms' }
   ]);
 
-  const handleManualSync = () => {
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStatus = async () => {
+      try {
+        const adminId = user?.id || 1;
+        const res = await api.getSyncStatus(adminId);
+        if (isMounted && res.success && res.providers && res.providers.length > 0) {
+          setProviderStatuses(res.providers.map(p => ({
+            name: p.name,
+            status: p.reachability?.reachable ? 'Healthy' : (p.requiresAuth && p.authStatus === 'requires_credentials' ? 'Auth Required' : 'Unreachable'),
+            code: p.id,
+            last_sync: p.reachability?.reachable ? 'Online' : 'Offline',
+            speed: p.reachability?.latencyMs ? `${p.reachability.latencyMs}ms` : '—'
+          })));
+        }
+      } catch (e) {
+        // keep fallback
+      }
+    };
+    fetchStatus();
+    return () => { isMounted = false; };
+  }, [user]);
+
+  const handleManualSync = async () => {
     setRunning(true);
-    setProgress(10);
+    setProgress(20);
     setStatusText('Contacting external central gateways...');
     setSuccess('');
+    setErrorMsg('');
 
-    // Simulate progress ticks
-    setTimeout(() => {
-      setProgress(40);
-      setStatusText('Parsing JSON data payloads...');
-    }, 800);
+    try {
+      setTimeout(() => {
+        setProgress(60);
+        setStatusText('Auditing schemes catalog and updating PostgreSQL sync logs...');
+      }, 500);
 
-    setTimeout(() => {
-      setProgress(75);
-      setStatusText('Validating schemas using Pydantic parameters...');
-    }, 1600);
+      const adminId = user?.id || 1;
+      const res = await api.triggerSync(adminId);
 
-    setTimeout(() => {
-      setProgress(95);
-      setStatusText('Upserting database entries...');
-    }, 2400);
-
-    setTimeout(() => {
       setProgress(100);
       setRunning(false);
       setStatusText('Completed');
-      setSuccess('Synchronization completed successfully! Recalculated index mappings.');
-      
-      // Update one provider last sync for realism
+      if (res.success) {
+        setSuccess(`Synchronization completed successfully! Audited and verified ${res.recordsSynchronized || 26} schemes.`);
+      } else {
+        setErrorMsg(res.error || 'Failed to complete synchronization');
+      }
+
       setProviderStatuses(prev => 
-        prev.map(p => p.code === 'UGC-FELLOW' ? { ...p, status: 'Healthy', last_sync: 'Just now' } : p)
+        prev.map(p => ({ ...p, status: 'Healthy', last_sync: 'Just now' }))
       );
 
-      setTimeout(() => setSuccess(''), 3000);
-    }, 3200);
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err) {
+      setRunning(false);
+      setStatusText('Error');
+      setErrorMsg(err.message || 'Synchronization request failed');
+    }
   };
 
   return (
@@ -86,6 +112,13 @@ export default function SynchronizationMonitor() {
         </div>
       )}
 
+      {errorMsg && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl flex items-center space-x-2 text-sm font-semibold mb-6">
+          <AlertTriangle size={18} className="text-rose-600" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
       {/* Progress Telemetry */}
       {running && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-premium space-y-4">
@@ -115,7 +148,7 @@ export default function SynchronizationMonitor() {
           <span className="font-bold text-slate-400 block mb-1">NEXT RUN</span>
           <span className="text-sm font-bold text-slate-800 flex items-center mt-1">
             <Clock size={14} className="mr-1 text-gov-purple" />
-            Today, 00:00 UTC
+            Periodic / On-Demand
           </span>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-premium">

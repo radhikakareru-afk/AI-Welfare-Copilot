@@ -35,18 +35,20 @@ export const evaluateEligibility = (profile, scheme) => {
 
   // 2. Income check
   if (rules.income_max !== null && profile.annual_income > rules.income_max) {
-    failures.push(`Annual income is ₹${profile.annual_income.toLocaleString()}, but the scheme limit is ₹${rules.income_max.toLocaleString()}.`);
+    failures.push(`Annual income is ₹${Number(profile.annual_income || 0).toLocaleString()}, but the scheme limit is ₹${Number(rules.income_max).toLocaleString()}.`);
   } else if (rules.income_max !== null) {
-    reasons.push(`Annual income is within the ₹${rules.income_max.toLocaleString()} limit.`);
+    reasons.push(`Annual income is within the ₹${Number(rules.income_max).toLocaleString()} limit.`);
   }
 
   // 3. State check
   if (rules.states_allowed && rules.states_allowed.length > 0) {
-    const isStateAllowed = rules.states_allowed.some(
-      (s) => s.toLowerCase() === profile.state.toLowerCase()
-    );
+    const userState = (profile.state || '').trim().toLowerCase();
+    const isStateAllowed = rules.states_allowed.some((s) => {
+      const sNorm = s.trim().toLowerCase();
+      return sNorm === userState || sNorm === 'all' || sNorm === 'all india' || sNorm === 'central';
+    });
     if (!isStateAllowed) {
-      failures.push(`Resides in ${profile.state}, but the scheme is only active in: ${rules.states_allowed.join(", ")}.`);
+      failures.push(`Resides in ${profile.state || 'unspecified state'}, but the scheme is only active in: ${rules.states_allowed.join(", ")}.`);
     } else {
       reasons.push(`Resides in the eligible state: ${profile.state}.`);
     }
@@ -54,11 +56,12 @@ export const evaluateEligibility = (profile, scheme) => {
 
   // 4. District check
   if (rules.districts_allowed && rules.districts_allowed.length > 0) {
+    const userDistrict = (profile.district || '').trim().toLowerCase();
     const isDistrictAllowed = rules.districts_allowed.some(
-      (d) => d.toLowerCase() === profile.district.toLowerCase()
+      (d) => d.trim().toLowerCase() === userDistrict
     );
     if (!isDistrictAllowed) {
-      failures.push(`Resides in ${profile.district} district, but the scheme is active in: ${rules.districts_allowed.join(", ")}.`);
+      failures.push(`Resides in ${profile.district || 'unspecified district'} district, but the scheme is active in: ${rules.districts_allowed.join(", ")}.`);
     } else {
       reasons.push(`Resides in the eligible district: ${profile.district}.`);
     }
@@ -66,11 +69,16 @@ export const evaluateEligibility = (profile, scheme) => {
 
   // 5. Gender check
   if (rules.genders_allowed && rules.genders_allowed.length > 0) {
-    const isGenderAllowed = rules.genders_allowed.some(
-      (g) => g.toLowerCase() === profile.gender.toLowerCase()
-    );
+    const userGender = (profile.gender || '').trim().toLowerCase();
+    const isGenderAllowed = rules.genders_allowed.some((g) => {
+      const gNorm = g.trim().toLowerCase();
+      if (gNorm === userGender) return true;
+      if ((gNorm === 'female' || gNorm === 'women' || gNorm === 'woman') && userGender === 'female') return true;
+      if ((gNorm === 'male' || gNorm === 'men' || gNorm === 'man') && userGender === 'male') return true;
+      return false;
+    });
     if (!isGenderAllowed) {
-      failures.push(`Gender is ${profile.gender}, but the scheme targets: ${rules.genders_allowed.join(", ")}.`);
+      failures.push(`Gender is ${profile.gender || 'unspecified'}, but the scheme targets: ${rules.genders_allowed.join(", ")}.`);
     } else {
       reasons.push(`Gender matches eligibility requirements.`);
     }
@@ -78,11 +86,12 @@ export const evaluateEligibility = (profile, scheme) => {
 
   // 6. Category check (caste/demographics)
   if (rules.categories_allowed && rules.categories_allowed.length > 0) {
+    const userCat = (profile.category || '').trim().toLowerCase();
     const isCategoryAllowed = rules.categories_allowed.some(
-      (c) => c.toLowerCase() === profile.category.toLowerCase()
+      (c) => c.trim().toLowerCase() === userCat
     );
     if (!isCategoryAllowed) {
-      failures.push(`Caste category is ${profile.category}, but the scheme is restricted to: ${rules.categories_allowed.join(", ")}.`);
+      failures.push(`Caste category is ${profile.category || 'unspecified'}, but the scheme is restricted to: ${rules.categories_allowed.join(", ")}.`);
     } else {
       reasons.push(`Social category ${profile.category} matches requirements.`);
     }
@@ -102,16 +111,18 @@ export const evaluateEligibility = (profile, scheme) => {
   // 8. Occupation check - Dynamic for Partially Eligible
   let occupationMatch = true;
   if (rules.occupations_allowed && rules.occupations_allowed.length > 0) {
+    const userOcc = (profile.occupation || '').trim().toLowerCase();
     occupationMatch = rules.occupations_allowed.some(
-      (o) => o.toLowerCase() === profile.occupation.toLowerCase()
+      (o) => o.trim().toLowerCase() === userOcc
     );
   }
 
   // 9. Education check - Dynamic for Partially Eligible
   let educationMatch = true;
   if (rules.educations_allowed && rules.educations_allowed.length > 0) {
+    const userEdu = (profile.education || '').trim().toLowerCase();
     educationMatch = rules.educations_allowed.some(
-      (e) => e.toLowerCase() === profile.education.toLowerCase()
+      (e) => e.trim().toLowerCase() === userEdu
     );
   }
 

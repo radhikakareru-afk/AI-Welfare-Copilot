@@ -149,6 +149,16 @@ export const api = {
     headers: { 'x-user-id': String(adminId) },
     body: JSON.stringify({ is_active: isActive }),
   }),
+  triggerSync: (adminId = 1) => request('/api/admin/sync', {
+    method: 'POST',
+    headers: { 'x-user-id': String(adminId) }
+  }),
+  getSyncLogs: (adminId = 1) => request('/api/admin/sync/logs', {
+    headers: { 'x-user-id': String(adminId) }
+  }),
+  getSyncStatus: (adminId = 1) => request('/api/admin/sync/status', {
+    headers: { 'x-user-id': String(adminId) }
+  }),
 
   // Favorites
   getFavorites: (userId) => request(`/api/users/${userId}/favorites`),

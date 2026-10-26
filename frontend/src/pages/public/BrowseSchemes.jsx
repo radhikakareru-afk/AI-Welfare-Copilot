@@ -55,27 +55,66 @@ export default function BrowseSchemes() {
       });
   }, []);
 
-  // Dynamically extract categories from live schemes list
+  // Dynamically extract categories from live schemes list with priority ordering
   const categories = useMemo(() => {
-    return ['All', ...new Set(schemes.map(s => s.category))];
+    const set = new Set();
+    const priorityCategories = [
+      'Farmers and Agriculture',
+      'Education and Scholarships',
+      'Maharashtra State Schemes',
+      'Women and Women Empowerment'
+    ];
+    schemes.forEach(s => {
+      if (s.category) set.add(s.category);
+    });
+    set.add('Maharashtra State Schemes');
+    
+    const uniqueFromSchemes = Array.from(set);
+    const ordered = [
+      ...priorityCategories.filter(p => uniqueFromSchemes.includes(p) || p === 'Maharashtra State Schemes'),
+      ...uniqueFromSchemes.filter(c => !priorityCategories.includes(c)).sort()
+    ];
+    return ['All', ...ordered];
   }, [schemes]);
 
   // Filter schemes
   const filteredSchemes = useMemo(() => {
     let result = schemes.filter(scheme => {
       // 1. Text Search
-      const searchStr = `${scheme.name} ${scheme.tagline || ''} ${scheme.description || ''} ${scheme.department || ''}`.toLowerCase();
+      const searchStr = `${scheme.name} ${scheme.tagline || ''} ${scheme.description || ''} ${scheme.department || ''} ${scheme.category || ''} ${scheme.state || ''}`.toLowerCase();
       const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
 
       // 2. Category Filter
-      const matchesCategory = selectedCategory === 'All' || scheme.category === selectedCategory;
+      let matchesCategory = true;
+      if (selectedCategory !== 'All') {
+        if (selectedCategory === 'Maharashtra State Schemes') {
+          matchesCategory = scheme.state === 'Maharashtra' || scheme.category === 'Maharashtra State Schemes';
+        } else if (selectedCategory === 'Farmers and Agriculture') {
+          matchesCategory = scheme.category === 'Farmers and Agriculture' || scheme.category === 'Farmers';
+        } else if (selectedCategory === 'Education and Scholarships') {
+          matchesCategory = scheme.category === 'Education and Scholarships' || scheme.category === 'Education';
+        } else if (selectedCategory === 'Women and Women Empowerment') {
+          matchesCategory = scheme.category === 'Women and Women Empowerment' || scheme.category === 'Women';
+        } else {
+          matchesCategory = scheme.category === selectedCategory;
+        }
+      }
 
       // 3. State Filter
-      const matchesState = selectedState === 'All' || 
-        !scheme.rules || 
-        !scheme.rules.states_allowed ||
-        scheme.rules.states_allowed.length === 0 || 
-        scheme.rules.states_allowed.some(s => s.toLowerCase() === selectedState.toLowerCase());
+      let matchesState = true;
+      if (selectedState !== 'All') {
+        const selStateLower = selectedState.toLowerCase();
+        const schemeStateLower = (scheme.state || '').toLowerCase();
+        const allowed = scheme.rules?.states_allowed || [];
+        
+        if (schemeStateLower) {
+          matchesState = schemeStateLower === selStateLower || allowed.some(s => s.toLowerCase() === selStateLower || s.toLowerCase() === 'all' || s.toLowerCase() === 'all india');
+        } else if (allowed.length > 0) {
+          matchesState = allowed.some(s => s.toLowerCase() === selStateLower || s.toLowerCase() === 'all' || s.toLowerCase() === 'all india');
+        } else {
+          matchesState = true;
+        }
+      }
 
       // 4. Occupation Filter
       const matchesOccupation = selectedOccupation === 'All' ||

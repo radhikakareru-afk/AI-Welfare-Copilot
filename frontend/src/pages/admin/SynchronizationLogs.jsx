@@ -1,17 +1,51 @@
-import React, { useState, useMemo } from 'react';
-import { MOCK_ANALYTICS } from '../../data/analytics';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../services/api';
 import { Search, FileText, CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function SynchronizationLogs() {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedLogId, setExpandedLogId] = useState(null);
+  const [dbLogs, setDbLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getSyncLogs(user?.id || 1)
+      .then(res => {
+        if (!isMounted) return;
+        if (res.success && res.logs && res.logs.length > 0) {
+          const formatted = res.logs.map(l => ({
+            id: `log-${l.id}`,
+            provider: l.provider || 'Government Welfare Portal',
+            status: l.status,
+            started_at: l.started_at,
+            duration: l.duration_seconds ? `${l.duration_seconds}s` : '1s',
+            added: l.records_inserted || 0,
+            updated: l.records_updated || 0,
+            failed: l.records_failed || 0,
+            details: `Catalog sync operation (${l.sync_type || 'system'}). Processed ${l.records_fetched || 0} scheme records.`,
+            error: l.error_message
+          }));
+          setDbLogs(formatted);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error loading DB sync logs:', err);
+        if (isMounted) setLoading(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [user]);
 
   const logs = useMemo(() => {
-    return MOCK_ANALYTICS.syncLogs.filter(log => {
+    return dbLogs.filter(log => {
       const searchStr = `${log.provider} ${log.status} ${log.details} ${log.error || ''}`.toLowerCase();
       return searchStr.includes(searchTerm.toLowerCase());
     });
-  }, [searchTerm]);
+  }, [dbLogs, searchTerm]);
 
   const toggleExpand = (logId) => {
     setExpandedLogId(expandedLogId === logId ? null : logId);
@@ -27,7 +61,7 @@ export default function SynchronizationLogs() {
           <span>Synchronization Audit Logs</span>
         </h1>
         <p className="mt-2 text-slate-500 text-sm">
-          Detailed history of cron synchronization operations, pipeline durations, and node failure summaries.
+          Detailed history of scheme synchronization operations, pipeline durations, and node summaries.
         </p>
       </div>
 
@@ -49,7 +83,11 @@ export default function SynchronizationLogs() {
 
       {/* Logs Table / List */}
       <div className="space-y-4 max-w-4xl">
-        {logs.length > 0 ? (
+        {loading ? (
+          <div className="bg-white p-8 text-center border border-slate-200 rounded-2xl shadow-premium text-slate-400 text-xs">
+            Loading synchronization logs...
+          </div>
+        ) : logs.length > 0 ? (
           logs.map((log) => {
             const isExpanded = expandedLogId === log.id;
             return (
@@ -115,8 +153,10 @@ export default function SynchronizationLogs() {
           })
         ) : (
           <div className="bg-white p-12 text-center border border-slate-200 rounded-2xl shadow-premium">
-            <h3 className="text-sm font-bold text-gov-dark mb-1">No Audit Logs Match</h3>
-            <p className="text-xs text-slate-500">Try adjusting your filter search query.</p>
+            <h3 className="text-sm font-bold text-gov-dark mb-1">No Synchronization Audit Logs Found</h3>
+            <p className="text-xs text-slate-500">
+              Trigger a manual sync from the Sync Monitor to create real audit logs in PostgreSQL.
+            </p>
           </div>
         )}
       </div>
