@@ -4,8 +4,15 @@
   "description": "AI Welfare Copilot Workspace",
   "private": true,
   "scripts": {
-    "dev": "npm run dev --prefix frontend",
+    "dev": "node dev.js",
+    "dev:all": "node dev.js",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:python": "backend-python\\venv\\Scripts\\python.exe backend-python\\app.py",
+    "start": "node dev.js",
     "build": "npm run build --prefix frontend",
-    "install:frontend": "npm install --prefix frontend"
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "install:frontend": "npm install --prefix frontend",
+    "install:backend": "npm install --prefix backend"
   }
 }

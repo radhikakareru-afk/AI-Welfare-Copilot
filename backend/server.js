@@ -1,17 +1,41 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const db = require('./db');
+const path = require('path');
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from backend directory
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id']
+}));
 app.use(express.json());
+
+// GET / (Root Health Check)
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    service: 'AI Welfare Copilot Core Express Backend',
+    status: 'operational',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/test-db',
+      schemes: '/api/schemes',
+      categories: '/api/categories',
+      statistics: '/api/public/statistics',
+      eligibility: '/api/eligibility/check',
+      admin: '/api/admin'
+    }
+  });
+});
 
 // GET /api/test-db
 app.get('/api/test-db', async (req, res) => {
@@ -40,12 +64,15 @@ app.get('/api/categories', async (req, res) => {
 
 // Import and register route modules
 app.use('/api/users', require('./routes/users'));
+app.use('/api/auth', require('./routes/users')); // Support /api/auth/login natively on Express
 app.use('/api/schemes', require('./routes/schemes'));
 app.use('/api/eligibility', require('./routes/eligibility'));
 app.use('/api/comparisons', require('./routes/comparisons'));
 app.use('/api/admin', require('./routes/admin'));
 
 // Mount routers that have paths starting with /api/users or directly in /api
+app.use('/api', require('./routes/public'));
+app.use('/api/public', require('./routes/public'));
 app.use('/api', require('./routes/favorites'));
 app.use('/api', require('./routes/recentlyViewed'));
 app.use('/api', require('./routes/notifications'));
@@ -98,7 +125,7 @@ async function seedDemoUsers() {
 }
 
 // Start Server
-app.listen(PORT, async () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server is running on port ${PORT}`);
   await seedDemoUsers();
 });
