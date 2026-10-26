@@ -7,20 +7,44 @@ async function request(path, options = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    });
 
-  const result = await response.json();
-  if (!response.ok) {
-    const error = new Error(result.message || `Request failed with status ${response.status}`);
-    error.status = response.status;
-    error.data = result;
-    throw error;
+    const result = await response.json();
+    if (!response.ok) {
+      const error = new Error(result.message || `Request failed with status ${response.status}`);
+      error.status = response.status;
+      error.data = result;
+      throw error;
+    }
+
+    return result;
+  } catch (err) {
+    // If localhost failed due to host resolution on Windows, try 127.0.0.1 fallback
+    if (API_URL.includes('localhost') && (err.name === 'TypeError' || err.message?.includes('fetch'))) {
+      const fallbackUrl = API_URL.replace('localhost', '127.0.0.1');
+      try {
+        const fallbackResponse = await fetch(`${fallbackUrl}${path}`, {
+          ...options,
+          headers,
+        });
+        const fallbackResult = await fallbackResponse.json();
+        if (!fallbackResponse.ok) {
+          const error = new Error(fallbackResult.message || `Request failed with status ${fallbackResponse.status}`);
+          error.status = fallbackResponse.status;
+          error.data = fallbackResult;
+          throw error;
+        }
+        return fallbackResult;
+      } catch (fallbackErr) {
+        throw err;
+      }
+    }
+    throw err;
   }
-
-  return result;
 }
 
 async function authRequest(path, options = {}) {
@@ -29,20 +53,43 @@ async function authRequest(path, options = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(`${AUTH_API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(`${AUTH_API_URL}${path}`, {
+      ...options,
+      headers,
+    });
 
-  const result = await response.json();
-  if (!response.ok) {
-    const error = new Error(result.message || `Request failed with status ${response.status}`);
-    error.status = response.status;
-    error.data = result;
-    throw error;
+    const result = await response.json();
+    if (!response.ok) {
+      const error = new Error(result.message || `Request failed with status ${response.status}`);
+      error.status = response.status;
+      error.data = result;
+      throw error;
+    }
+
+    return result;
+  } catch (err) {
+    // If primary auth service is unreachable, attempt fallback to core backend
+    if ((err.name === 'TypeError' || err.message?.includes('fetch')) && AUTH_API_URL !== API_URL) {
+      try {
+        const fallbackResponse = await fetch(`${API_URL}${path}`, {
+          ...options,
+          headers,
+        });
+        const fallbackResult = await fallbackResponse.json();
+        if (!fallbackResponse.ok) {
+          const error = new Error(fallbackResult.message || `Request failed with status ${fallbackResponse.status}`);
+          error.status = fallbackResponse.status;
+          error.data = fallbackResult;
+          throw error;
+        }
+        return fallbackResult;
+      } catch (fallbackErr) {
+        throw err;
+      }
+    }
+    throw err;
   }
-
-  return result;
 }
 
 export const api = {

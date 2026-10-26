@@ -36,8 +36,8 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/users (Register)
-router.post('/', async (req, res) => {
+// POST /api/users or /api/auth/register (Register)
+const handleRegister = async (req, res) => {
   const { email, password, full_name, state, district } = req.body;
   if (!email || !password || !full_name) {
     return res.status(400).json({ success: false, message: 'Please provide email, password, and full name' });
@@ -90,7 +90,10 @@ router.post('/', async (req, res) => {
     console.error('Error registering user:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
-});
+};
+
+router.post('/', handleRegister);
+router.post('/register', handleRegister);
 
 // GET /api/users/:id
 router.get('/:id', async (req, res) => {
